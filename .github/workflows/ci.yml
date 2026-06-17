@@ -20,7 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [api-gateway, worker]
+        module:
+          - api-gateway
+          - auth-service
+          - upload-service
+          - status-service
+          - notification-service
+          - worker
     steps:
       - uses: actions/checkout@v4
 
@@ -43,7 +49,7 @@ jobs:
         run: go vet ./...
 
   # ---------------------------------------------------------------------------
-  # Testes e cobertura
+  # Testes unitários por módulo
   # ---------------------------------------------------------------------------
   test:
     name: Testes
@@ -52,56 +58,78 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # necessário para SonarCloud
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: |
             api-gateway/go.sum
+            auth-service/go.sum
+            upload-service/go.sum
+            status-service/go.sum
+            notification-service/go.sum
             worker/go.sum
 
       - name: Testes api-gateway
         working-directory: api-gateway
         run: |
-          go test \
-            -coverprofile=coverage.out \
-            ./config/... ./handler/... ./middleware/... ./repository/... ./service/...
-
-      - name: Gate cobertura api-gateway (≥80%)
-        working-directory: api-gateway
-        run: |
+          go test -coverprofile=coverage.out \
+            ./config/... ./middleware/... ./proxy/...
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
           echo "Cobertura api-gateway: ${total}%"
           awk "BEGIN { exit !($total >= 80) }" || \
             (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
 
-      - name: Converter cobertura api-gateway para XML (SonarCloud)
-        working-directory: api-gateway
+      - name: Testes auth-service
+        working-directory: auth-service
         run: |
-          go install github.com/axw/gocov/gocov@latest
-          go install github.com/AlekSi/gocov-xml@latest
-          gocov convert coverage.out | gocov-xml > coverage.xml
+          go test -coverprofile=coverage.out \
+            ./config/... ./domain/... ./service/... ./handler/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
+          echo "Cobertura auth-service: ${total}%"
+          awk "BEGIN { exit !($total >= 80) }" || \
+            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
+
+      - name: Testes upload-service
+        working-directory: upload-service
+        run: |
+          go test -coverprofile=coverage.out \
+            ./config/... ./domain/... ./service/... ./handler/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
+          echo "Cobertura upload-service: ${total}%"
+          awk "BEGIN { exit !($total >= 80) }" || \
+            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
+
+      - name: Testes status-service
+        working-directory: status-service
+        run: |
+          go test -coverprofile=coverage.out \
+            ./config/... ./domain/... ./service/... ./handler/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
+          echo "Cobertura status-service: ${total}%"
+          awk "BEGIN { exit !($total >= 80) }" || \
+            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
+
+      - name: Testes notification-service
+        working-directory: notification-service
+        run: |
+          go test -coverprofile=coverage.out \
+            ./config/... ./domain/... ./mailer/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
+          echo "Cobertura notification-service: ${total}%"
+          awk "BEGIN { exit !($total >= 80) }" || \
+            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
 
       - name: Testes worker
         working-directory: worker
         run: |
-          go test \
-            -coverprofile=coverage.out \
+          go test -coverprofile=coverage.out \
             ./config/... ./pipeline/... ./notification/... ./processor/...
-
-      - name: Gate cobertura worker (≥80%)
-        working-directory: worker
-        run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
           echo "Cobertura worker: ${total}%"
           awk "BEGIN { exit !($total >= 80) }" || \
             (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Converter cobertura worker para XML (SonarCloud)
-        working-directory: worker
-        run: |
-          gocov convert coverage.out | gocov-xml > coverage.xml
 
       - name: Upload relatórios de cobertura
         uses: actions/upload-artifact@v4
@@ -109,9 +137,11 @@ jobs:
           name: coverage-reports
           path: |
             api-gateway/coverage.out
-            api-gateway/coverage.xml
+            auth-service/coverage.out
+            upload-service/coverage.out
+            status-service/coverage.out
+            notification-service/coverage.out
             worker/coverage.out
-            worker/coverage.xml
 
   # ---------------------------------------------------------------------------
   # SonarCloud
@@ -148,7 +178,13 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [api-gateway, worker]
+        service:
+          - api-gateway
+          - auth-service
+          - upload-service
+          - status-service
+          - notification-service
+          - worker
     steps:
       - uses: actions/checkout@v4
 

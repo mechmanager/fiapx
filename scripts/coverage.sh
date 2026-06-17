@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Script de cobertura de testes do projeto FIAP X.
-# Exclui: cmd/ (entrypoints), mocks/ (código gerado), storage/ e queue/
-# (adaptadores de infra que precisam de serviços reais para testes de integração).
-# As funções New/Run/Close do consumer (conexão RabbitMQ) também são excluídas
-# por exigirem broker real — cobertas pelos testes de integração do CI (Fase 6).
+# Cobertura de testes de todos os módulos Go do projeto FIAP X.
+# Exclui cmd/ (entrypoints), mocks/ e adaptadores de infra (precisam de serviços reais).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -11,13 +8,14 @@ THRESHOLD=80
 
 run_coverage() {
   local module="$1"
-  local packages="$2"
+  shift
+  local packages=("$@")
 
   echo ""
   echo "=== Cobertura: $module ==="
   cd "$ROOT/$module"
 
-  go test -coverprofile=coverage.out $packages 2>&1
+  go test -coverprofile=coverage.out "${packages[@]}" 2>&1
 
   local total
   total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
@@ -32,10 +30,22 @@ run_coverage() {
 }
 
 run_coverage "api-gateway" \
-  "./config/... ./handler/... ./middleware/... ./repository/... ./service/..."
+  "./config/..." "./middleware/..." "./proxy/..."
+
+run_coverage "auth-service" \
+  "./config/..." "./domain/..." "./service/..." "./handler/..."
+
+run_coverage "upload-service" \
+  "./config/..." "./domain/..." "./service/..." "./handler/..."
+
+run_coverage "status-service" \
+  "./config/..." "./domain/..." "./service/..." "./handler/..."
+
+run_coverage "notification-service" \
+  "./config/..." "./domain/..." "./mailer/..."
 
 run_coverage "worker" \
-  "./config/... ./pipeline/... ./notification/... ./processor/..."
+  "./config/..." "./pipeline/..." "./notification/..." "./processor/..."
 
 echo ""
-echo "Cobertura OK em ambos os módulos."
+echo "Cobertura OK em todos os módulos."

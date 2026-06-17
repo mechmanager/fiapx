@@ -1,12 +1,11 @@
-# Orquestração local de toda a stack do FIAP X.
-# Pré-requisito: copiar .env.example → .env e preencher os valores.
-#   cp .env.example .env
+# FIAP X — orquestração local completa
+# Pré-requisito: cp .env.example .env  (e preencha JWT_SECRET)
 # Subir tudo: docker compose up --build
+# Escalar workers: docker compose up --scale worker=3
 
 services:
-  # ---------------------------------------------------------------------------
-  # Banco de dados relacional
-  # ---------------------------------------------------------------------------
+
+  # ── Banco de dados ────────────────────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: fiapx-postgres
@@ -26,9 +25,7 @@ services:
       timeout: 5s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # Mensageria
-  # ---------------------------------------------------------------------------
+  # ── Mensageria ────────────────────────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: fiapx-rabbitmq
@@ -38,16 +35,14 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672"     # management UI
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 10s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # Object storage
-  # ---------------------------------------------------------------------------
+  # ── Object storage ────────────────────────────────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: fiapx-minio
@@ -58,7 +53,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     ports:
       - "9000:9000"
-      - "9001:9001"
+      - "9001:9001"       # console UI
     volumes:
       - minio_data:/data
     healthcheck:
@@ -67,9 +62,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ---------------------------------------------------------------------------
-  # Job que cria o bucket no MinIO na primeira subida
-  # ---------------------------------------------------------------------------
   minio-setup:
     image: minio/mc:latest
     container_name: fiapx-minio-setup
@@ -81,31 +73,75 @@ services:
       /bin/sh -c "
       mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} &&
       mc mb --ignore-existing local/${MINIO_BUCKET:-videos} &&
-      echo 'Bucket ${MINIO_BUCKET:-videos} pronto';
+      echo 'bucket ${MINIO_BUCKET:-videos} pronto'
       "
 
-  # ---------------------------------------------------------------------------
-  # API Gateway
-  # ---------------------------------------------------------------------------
+  # ── Cache ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fiapx-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── API Gateway (proxy puro) ──────────────────────────────────────────────
   api-gateway:
     build:
       context: ./api-gateway
     container_name: fiapx-api-gateway
     env_file: .env
     ports:
-      - "${API_PORT:-8080}:${API_PORT:-8080}"
+      - "${GATEWAY_PORT:-8080}:${GATEWAY_PORT:-8080}"
     environment:
-      API_PORT: ${API_PORT:-8080}
-      DB_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      GATEWAY_PORT: ${GATEWAY_PORT:-8080}
+      JWT_SECRET: ${JWT_SECRET}
+      AUTH_SERVICE_URL: http://auth-service:8081
+      UPLOAD_SERVICE_URL: http://upload-service:8082
+      STATUS_SERVICE_URL: http://status-service:8083
+      RATE_LIMIT_RPS: ${RATE_LIMIT_RPS:-100}
+    depends_on:
+      auth-service:
+        condition: service_started
+      upload-service:
+        condition: service_started
+      status-service:
+        condition: service_started
+
+  # ── Auth Service ──────────────────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+    container_name: fiapx-auth-service
+    env_file: .env
+    environment:
+      AUTH_PORT: "8081"
+      POSTGRES_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ── Upload Service ────────────────────────────────────────────────────────
+  upload-service:
+    build:
+      context: ./upload-service
+    container_name: fiapx-upload-service
+    env_file: .env
+    environment:
+      UPLOAD_PORT: "8082"
+      POSTGRES_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
-      QUEUE_NAME: ${QUEUE_NAME:-video.process}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET:-videos}
       MINIO_USE_SSL: "false"
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_HOURS: ${JWT_EXPIRATION_HOURS:-24}
+      QUEUE_NAME: ${QUEUE_NAME:-video.upload}
     depends_on:
       postgres:
         condition: service_healthy
@@ -114,24 +150,47 @@ services:
       minio:
         condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Worker — escala horizontal: docker compose up --scale worker=3
-  # ---------------------------------------------------------------------------
+  # ── Status Service ────────────────────────────────────────────────────────
+  status-service:
+    build:
+      context: ./status-service
+    container_name: fiapx-status-service
+    env_file: .env
+    environment:
+      STATUS_PORT: "8083"
+      POSTGRES_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_BUCKET: ${MINIO_BUCKET:-videos}
+      MINIO_USE_SSL: "false"
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ── Worker (escala horizontal) ────────────────────────────────────────────
   worker:
     build:
       context: ./worker
     container_name: fiapx-worker
     env_file: .env
     environment:
-      DB_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      POSTGRES_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
-      QUEUE_NAME: ${QUEUE_NAME:-video.process}
-      PREFETCH_COUNT: ${PREFETCH_COUNT:-5}
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: ${MINIO_BUCKET:-videos}
       MINIO_USE_SSL: "false"
+      QUEUE_NAME: ${QUEUE_NAME:-video.upload}
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE:-notification}
+      PREFETCH_COUNT: ${PREFETCH_COUNT:-5}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,6 +199,52 @@ services:
       minio:
         condition: service_healthy
 
+  # ── Notification Service ──────────────────────────────────────────────────
+  notification-service:
+    build:
+      context: ./notification-service
+    container_name: fiapx-notification-service
+    env_file: .env
+    environment:
+      POSTGRES_DSN: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}@rabbitmq:5672/
+      NOTIFICATION_QUEUE: ${NOTIFICATION_QUEUE:-notification}
+      MAX_RETRIES: ${MAX_RETRIES:-3}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@fiapx.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ── Observabilidade ───────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fiapx-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fiapx-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
 volumes:
   postgres_data:
   minio_data:
+  grafana_data:
