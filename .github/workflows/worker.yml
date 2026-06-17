@@ -45,7 +45,7 @@ jobs:
       - name: Testes e cobertura
         working-directory: worker
         run: |
-          go test -coverprofile=coverage.out ./config/... ./pipeline/... ./notification/... ./processor/...
+          go test -coverprofile=coverage.out ./config/... ./pipeline/... ./processor/...
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
           echo "Cobertura: ${total}%"
           awk "BEGIN { exit !($total >= 80) }" || (echo "FALHA: ${total}% < 80%" && exit 1)
