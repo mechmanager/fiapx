@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIAP X — Processador de Vídeos</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 40px; width: 100%; max-width: 520px; }
+    h1 { font-size: 1.6rem; color: #1a1a2e; margin-bottom: 4px; }
+    .subtitle { color: #444; font-size: .9rem; margin-bottom: 28px; }
+    label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: 6px; color: #1a1a2e; }
+    input[type=text], input[type=email], input[type=password] {
+      width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px;
+      font-size: .95rem; margin-bottom: 14px; outline: none;
+    }
+    input:focus { border-color: #3a86ff; }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; transition: background .2s; }
+    .btn-primary { background: #3a86ff; color: #fff; }
+    .btn-primary:hover { background: #2568d9; }
+    .btn-secondary { background: #e9ecef; color: #333; margin-top: 8px; }
+    .btn-secondary:hover { background: #dee2e6; }
+    .link { text-align: center; margin-top: 16px; font-size: .9rem; color: #444; }
+    .link button { background: none; border: none; color: #3a86ff; text-decoration: none; cursor: pointer; font-size: .9rem; padding: 0; }
+    .msg { padding: 10px 14px; border-radius: 8px; font-size: .9rem; margin-bottom: 14px; display: none; }
+    .msg.ok { background: #d4edda; color: #155724; display: block; }
+    .msg.err { background: #f8d7da; color: #721c24; display: block; }
+    .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 14px; cursor: pointer; }
+    .upload-area:hover, .upload-area:focus { border-color: #3a86ff; outline: 2px solid #3a86ff; }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
+    td { padding: 8px; border-bottom: 1px solid #dee2e6; }
+    .badge { padding: 2px 8px; border-radius: 12px; font-size: .75rem; font-weight: 600; }
+    .badge-pending { background: #fff3cd; color: #5a3a00; }
+    .badge-processing { background: #cfe2ff; color: #002f7a; }
+    .badge-done { background: #d1e7dd; color: #052e16; }
+    .badge-error { background: #f8d7da; color: #44060b; }
+    .hidden { display: none; }
+    #view-dashboard { display: none; }
+    .logout-btn { background: none; border: none; cursor: pointer; color: #444; font-size: .85rem; }
+    .refresh-btn { background: none; border: none; cursor: pointer; color: #3a86ff; font-size: .85rem; }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- VIEW: Login -->
+  <div id="view-login">
+    <h1>FIAP X</h1>
+    <p class="subtitle">Processador de Vídeos</p>
+    <div id="login-msg" class="msg" role="alert" aria-live="polite"></div>
+    <label for="login-email">Email</label>
+    <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+    <label for="login-password">Senha</label>
+    <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password" />
+    <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
+    <p class="link">Não tem conta? <button onclick="showRegister()">Cadastre-se</button></p>
+  </div>
+
+  <!-- VIEW: Register -->
+  <div id="view-register" class="hidden">
+    <h1>Criar conta</h1>
+    <p class="subtitle">FIAP X — Processador de Vídeos</p>
+    <div id="reg-msg" class="msg" role="alert" aria-live="polite"></div>
+    <label for="reg-name">Nome</label>
+    <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" />
+    <label for="reg-email">Email</label>
+    <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" />
+    <label for="reg-password">Senha</label>
+    <input type="password" id="reg-password" placeholder="mínimo 6 caracteres" autocomplete="new-password" />
+    <button class="btn btn-primary" onclick="doRegister()">Criar conta</button>
+    <button class="btn btn-secondary" onclick="showLogin()">Voltar ao login</button>
+  </div>
+
+  <!-- VIEW: Dashboard -->
+  <div id="view-dashboard">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+      <h1>Meus Vídeos</h1>
+      <button class="logout-btn" onclick="doLogout()">Sair</button>
+    </div>
+    <div id="upload-msg" class="msg" role="alert" aria-live="polite"></div>
+    <label
+      class="upload-area"
+      for="file-input"
+      tabindex="0"
+      onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
+    >
+      <p>Clique para selecionar um vídeo</p>
+      <p style="font-size:.8rem;color:#666;margin-top:4px;">MP4, AVI, MOV, MKV, WMV, FLV, WEBM</p>
+      <input type="file" id="file-input" accept="video/*" style="display:none" onchange="doUpload(this)" />
+    </label>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <strong style="font-size:.9rem;">Histórico</strong>
+      <button class="refresh-btn" onclick="loadVideos()">Atualizar</button>
+    </div>
+    <table>
+      <thead><tr><th>Arquivo</th><th>Status</th><th>Ação</th></tr></thead>
+      <tbody id="videos-tbody"><tr><td colspan="3" style="text-align:center;color:#444;">Carregando...</td></tr></tbody>
+    </table>
+  </div>
+
+</div>
+<script>
+  let token = localStorage.getItem('fiapx_token') || '';
+
+  function show(id) {
+    ['view-login','view-register','view-dashboard'].forEach(v => {
+      document.getElementById(v).style.display = (v === id) ? 'block' : 'none';
+    });
+  }
+  function showLogin()    { clearMsgs(); show('view-login'); }
+  function showRegister() { clearMsgs(); show('view-register'); }
+  function clearMsgs()    { document.querySelectorAll('.msg').forEach(el => { el.className='msg'; el.textContent=''; }); }
+  function setMsg(id, text, ok) { const el=document.getElementById(id); el.textContent=text; el.className='msg '+(ok?'ok':'err'); }
+
+  async function api(path, opts={}) {
+    const headers = { 'Content-Type': 'application/json', ...opts.headers };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const r = await fetch(path, { ...opts, headers });
+    const body = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, body };
+  }
+
+  async function doLogin() {
+    const email = document.getElementById('login-email').value;
+    const password = document.getElementById('login-password').value;
+    const { ok, body } = await api('/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
+    if (!ok) { setMsg('login-msg', body.error || 'Erro ao fazer login', false); return; }
+    token = body.token;
+    localStorage.setItem('fiapx_token', token);
+    show('view-dashboard');
+    await loadVideos();
+  }
+
+  async function doRegister() {
+    const name = document.getElementById('reg-name').value;
+    const email = document.getElementById('reg-email').value;
+    const password = document.getElementById('reg-password').value;
+    const { ok, body } = await api('/auth/register', { method:'POST', body: JSON.stringify({ name, email, password }) });
+    if (!ok) { setMsg('reg-msg', body.error || 'Erro ao cadastrar', false); return; }
+    setMsg('reg-msg', 'Conta criada! Faça login.', true);
+    setTimeout(showLogin, 1500);
+  }
+
+  function doLogout() {
+    token = ''; localStorage.removeItem('fiapx_token'); showLogin();
+  }
+
+  async function doUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('video', file);
+    const r = await fetch('/videos', { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { setMsg('upload-msg', body.error || 'Erro no upload', false); return; }
+    setMsg('upload-msg', 'Vídeo enviado! ID: ' + body.id, true);
+    input.value = '';
+    setTimeout(loadVideos, 800);
+  }
+
+  async function loadVideos() {
+    const { ok, body } = await api('/videos');
+    const tbody = document.getElementById('videos-tbody');
+    if (!ok || !Array.isArray(body)) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo encontrado.</td></tr>';
+      return;
+    }
+    if (body.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo enviado ainda.</td></tr>';
+      return;
+    }
+    const badgeClass = { PENDING:'badge-pending', PROCESSING:'badge-processing', DONE:'badge-done', ERROR:'badge-error' };
+    tbody.innerHTML = body.map(v => {
+      const badge = badgeClass[v.status] || '';
+      let action;
+      if (v.status === 'DONE') {
+        action = `<a href="/videos/${v.id}/download" style="color:#3a86ff;font-size:.85rem;">Baixar ZIP</a>`;
+      } else {
+        action = `<span style="color:#444;font-size:.85rem;">${v.status === 'ERROR' ? (v.error_message || 'Erro') : '—'}</span>`;
+      }
+      const name = v.original_filename.length > 28 ? v.original_filename.slice(0, 25) + '...' : v.original_filename;
+      return `<tr>
+        <td title="${v.original_filename}">${name}</td>
+        <td><span class="badge ${badge}">${v.status}</span></td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  (async () => {
+    if (token) { show('view-dashboard'); await loadVideos(); }
+    else showLogin();
+  })();
+</script>
+</body>
+</html>

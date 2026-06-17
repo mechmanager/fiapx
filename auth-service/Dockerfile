@@ -1,0 +1,28 @@
+# Stage 1: build
+FROM golang:1.25-alpine AS builder
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY domain/ ./domain/
+COPY handler/ ./handler/
+COPY repository/ ./repository/
+COPY service/ ./service/
+RUN CGO_ENABLED=0 GOOS=linux go build -o auth-service ./cmd/auth
+
+# Stage 2: final image
+FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates tzdata && addgroup -S appgroup && adduser -S -G appgroup appuser
+
+WORKDIR /app
+
+COPY --from=builder /app/auth-service .
+
+USER appuser
+EXPOSE 8081
+
+ENTRYPOINT ["./auth-service"]

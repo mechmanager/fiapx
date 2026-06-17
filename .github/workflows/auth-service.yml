@@ -1,0 +1,43 @@
+name: auth-service
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "auth-service/**"
+      - ".github/workflows/auth-service.yml"
+  pull_request:
+    paths:
+      - "auth-service/**"
+
+concurrency:
+  group: auth-service-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/fiapx
+
+jobs:
+  lint-and-test:
+    name: Lint e Testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: auth-service/go.sum
+
+      - name: gofmt
+        run: |
+          bad=$(gofmt -l ./auth-service)
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+
+      - name: go vet
+        working-directory: auth-service
+        run: go vet ./...

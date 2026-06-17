@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-shared
+  namespace: fiapx
+data:
+  POSTGRES_DB: "fiapx"
+  POSTGRES_USER: "fiapx"
+  MINIO_ENDPOINT: "minio:9000"
+  MINIO_BUCKET: "videos"
+  MINIO_USE_SSL: "false"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-gateway-config
+  namespace: fiapx
+data:
+  GATEWAY_PORT: "8080"
+  RATE_LIMIT_RPS: "100"
+  AUTH_SERVICE_URL: "http://auth-service:8081"
+  UPLOAD_SERVICE_URL: "http://upload-service:8082"
+  STATUS_SERVICE_URL: "http://status-service:8083"
+  JWT_EXPIRATION_HOURS: "24"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-worker-config
+  namespace: fiapx
+data:
+  QUEUE_NAME: "video.upload"
+  NOTIFICATION_QUEUE: "notification"
+  PREFETCH_COUNT: "5"
+  MAX_RETRIES: "3"
+  RABBITMQ_DEFAULT_USER: "fiapx"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-auth-config
+  namespace: fiapx
+data:
+  AUTH_PORT: "8081"
+  JWT_EXPIRATION_HOURS: "24"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-upload-config
+  namespace: fiapx
+data:
+  UPLOAD_PORT: "8082"
+  QUEUE_NAME: "video.upload"
+  RABBITMQ_DEFAULT_USER: "fiapx"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-status-config
+  namespace: fiapx
+data:
+  STATUS_PORT: "8083"
+  REDIS_URL: "redis://redis:6379"

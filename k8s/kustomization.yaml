@@ -1,0 +1,16 @@
+# Aplica todos os manifestos na ordem correta:
+#   kubectl apply -k k8s/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: fiapx
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml        # gerado a partir de secrets.yaml.example (não versionado)
+  - postgres.yaml
+  - rabbitmq.yaml
+  - minio.yaml
+  - api-gateway.yaml
+  - worker.yaml
