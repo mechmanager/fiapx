@@ -2,10 +2,8 @@ package consumer
 
 import (
 	"context"
-	"crypto/md5"
 	"fmt"
 	"log"
-	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -21,9 +19,6 @@ type Consumer struct {
 	queueName  string
 	maxRetries int
 	pipeline   *pipeline.Pipeline
-
-	mu      sync.Mutex
-	retries map[[16]byte]int // hash do body → contagem de tentativas
 }
 
 func New(
@@ -51,7 +46,6 @@ func New(
 		return nil, fmt.Errorf("erro ao configurar QoS: %w", err)
 	}
 
-	// Declara a DLQ antes da fila principal.
 	dlq := queueName + ".dlq"
 	if _, err = ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
 		ch.Close()
@@ -59,7 +53,6 @@ func New(
 		return nil, fmt.Errorf("erro ao declarar DLQ: %w", err)
 	}
 
-	// Fila principal configurada com dead-letter para a DLQ.
 	args := amqp.Table{
 		"x-dead-letter-exchange":    "",
 		"x-dead-letter-routing-key": dlq,
@@ -73,7 +66,6 @@ func New(
 	return &Consumer{
 		conn: conn, channel: ch, queueName: queueName,
 		maxRetries: maxRetries,
-		retries:    make(map[[16]byte]int),
 		pipeline:   pipeline.New(videos, stor, proc, notifier),
 	}, nil
 }
@@ -100,31 +92,38 @@ func (c *Consumer) Run(ctx context.Context) error {
 }
 
 func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
-	key := md5.Sum(msg.Body)
 	ack, _ := c.pipeline.HandleMessage(ctx, msg.Body)
 
 	if ack {
-		c.mu.Lock()
-		delete(c.retries, key)
-		c.mu.Unlock()
 		msg.Ack(false)
 		return
 	}
 
-	c.mu.Lock()
-	c.retries[key]++
-	count := c.retries[key]
-	c.mu.Unlock()
-
-	if count >= c.maxRetries {
+	retries := xDeathCount(msg)
+	if retries >= c.maxRetries {
 		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.maxRetries)
-		c.mu.Lock()
-		delete(c.retries, key)
-		c.mu.Unlock()
-		msg.Nack(false, false) // sem requeue → vai para DLQ
+		msg.Nack(false, false)
 	} else {
-		msg.Nack(false, true) // requeue para nova tentativa
+		msg.Nack(false, true)
 	}
+}
+
+// xDeathCount lê o número de mortes (tentativas) do header x-death do RabbitMQ.
+func xDeathCount(msg amqp.Delivery) int {
+	xDeath, ok := msg.Headers["x-death"]
+	if !ok {
+		return 0
+	}
+	deathList, ok := xDeath.([]interface{})
+	if !ok || len(deathList) == 0 {
+		return 0
+	}
+	deathMap, ok := deathList[0].(amqp.Table)
+	if !ok {
+		return 0
+	}
+	count, _ := deathMap["count"].(int64)
+	return int(count)
 }
 
 func (c *Consumer) Close() {
@@ -132,5 +131,4 @@ func (c *Consumer) Close() {
 	c.conn.Close()
 }
 
-// Garante que *processor.Processor satisfaz VideoProcessor em compilação.
 var _ pipeline.VideoProcessor = (*processor.Processor)(nil)

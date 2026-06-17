@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/mechmanager/fiapx/api-gateway/config"
 	"github.com/mechmanager/fiapx/api-gateway/middleware"
@@ -16,22 +17,31 @@ func main() {
 		log.Fatalf("configuração inválida: %v", err)
 	}
 
+	authProxy, err := proxy.New(cfg.AuthServiceURL)
+	if err != nil {
+		log.Fatalf("proxy auth inválido: %v", err)
+	}
+	uploadProxy, err := proxy.New(cfg.UploadServiceURL)
+	if err != nil {
+		log.Fatalf("proxy upload inválido: %v", err)
+	}
+	statusProxy, err := proxy.New(cfg.StatusServiceURL)
+	if err != nil {
+		log.Fatalf("proxy status inválido: %v", err)
+	}
+
 	jwtChecker := middleware.NewJWTChecker(cfg.JWTSecret)
 	rateLimiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS)
 
-	authProxy := proxy.New(cfg.AuthServiceURL)
-	uploadProxy := proxy.New(cfg.UploadServiceURL)
-	statusProxy := proxy.New(cfg.StatusServiceURL)
-
 	mux := http.NewServeMux()
 
-	// Saúde do próprio gateway.
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok","service":"api-gateway"}`))
+		if _, err := w.Write([]byte(`{"status":"ok","service":"api-gateway"}`)); err != nil {
+			log.Printf("health write error: %v", err)
+		}
 	})
 
-	// Frontend estático embutido no binário.
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -43,23 +53,27 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(data)
+		if _, err := w.Write(data); err != nil {
+			log.Printf("frontend write error: %v", err)
+		}
 	})
 
-	// Rotas públicas → auth-service (sem JWT).
 	mux.Handle("POST /auth/register", authProxy)
 	mux.Handle("POST /auth/login", authProxy)
-
-	// Rotas protegidas → upload-service e status-service (JWT obrigatório).
 	mux.Handle("POST /videos", jwtChecker.Middleware(uploadProxy))
 	mux.Handle("GET /videos", jwtChecker.Middleware(statusProxy))
 	mux.Handle("GET /videos/{id}/download", jwtChecker.Middleware(statusProxy))
 
-	// Aplica rate limiter sobre todo o mux.
-	handler := rateLimiter.Middleware(mux)
+	srv := &http.Server{
+		Addr:         ":" + cfg.GatewayPort,
+		Handler:      rateLimiter.Middleware(mux),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
 
 	log.Printf("api-gateway escutando na porta %s", cfg.GatewayPort)
-	if err := http.ListenAndServe(":"+cfg.GatewayPort, handler); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("erro ao iniciar servidor: %v", err)
 	}
 }

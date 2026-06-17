@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -102,7 +103,9 @@ func (h *StatusHandler) Download(c *gin.Context) {
 
 	c.Header("Content-Disposition", "attachment; filename=frames_"+videoID.String()+".zip")
 	c.Header("Content-Type", "application/zip")
-	io.Copy(c.Writer, stream)
+	if _, err := io.Copy(c.Writer, stream); err != nil {
+		log.Printf("erro ao fazer stream do arquivo %s: %v", videoID, err)
+	}
 }
 
 // parseUserID lê e valida o header X-User-ID. Responde 401 se ausente ou inválido.

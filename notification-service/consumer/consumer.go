@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/mechmanager/fiapx/notification-service/domain"
 	"github.com/mechmanager/fiapx/notification-service/mailer"

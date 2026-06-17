@@ -19,6 +19,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         module:
           - api-gateway
@@ -177,6 +178,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         service:
           - api-gateway
