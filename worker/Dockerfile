@@ -17,9 +17,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
 FROM alpine:3.20
 
 # ffmpeg processa os vídeos; ca-certificates habilita chamadas TLS.
-RUN apk add --no-cache ffmpeg ca-certificates
+RUN apk add --no-cache ffmpeg ca-certificates && addgroup -S appgroup && adduser -S -G appgroup appuser
 
 WORKDIR /app
 COPY --from=builder /worker /app/worker
 
+USER appuser
 ENTRYPOINT ["/app/worker"]

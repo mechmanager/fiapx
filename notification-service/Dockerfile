@@ -12,9 +12,10 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /notification-service ./cmd/notificatio
 # ---- Estágio final ----
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && addgroup -S appgroup && adduser -S -G appgroup appuser
 
 WORKDIR /app
 COPY --from=builder /notification-service /app/notification-service
 
+USER appuser
 ENTRYPOINT ["/app/notification-service"]

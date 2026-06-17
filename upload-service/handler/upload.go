@@ -42,7 +42,7 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	file, header, err := c.Request.FormFile("file")
+	file, header, err := c.Request.FormFile("video")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
 		return

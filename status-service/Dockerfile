@@ -12,11 +12,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o /status-service ./cmd/status
 # ---- Estágio final ----
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates && addgroup -S appgroup && adduser -S -G appgroup appuser
 
 WORKDIR /app
 COPY --from=builder /status-service /app/status-service
 
+USER appuser
 EXPOSE 8083
 
 ENTRYPOINT ["/app/status-service"]

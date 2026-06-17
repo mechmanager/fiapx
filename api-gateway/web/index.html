@@ -32,10 +32,10 @@
     th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
     td { padding: 8px; border-bottom: 1px solid #dee2e6; }
     .badge { padding: 2px 8px; border-radius: 12px; font-size: .75rem; font-weight: 600; }
-    .badge-pending { background: #fff3cd; color: #856404; }
-    .badge-processing { background: #cfe2ff; color: #084298; }
-    .badge-done { background: #d1e7dd; color: #0a3622; }
-    .badge-error { background: #f8d7da; color: #58151c; }
+    .badge-pending { background: #fff3cd; color: #5a3a00; }
+    .badge-processing { background: #cfe2ff; color: #002f7a; }
+    .badge-done { background: #d1e7dd; color: #052e16; }
+    .badge-error { background: #f8d7da; color: #44060b; }
     .hidden { display: none; }
     #view-dashboard { display: none; }
     .logout-btn { background: none; border: none; cursor: pointer; color: #444; font-size: .85rem; }
@@ -80,18 +80,16 @@
       <button class="logout-btn" onclick="doLogout()">Sair</button>
     </div>
     <div id="upload-msg" class="msg" role="alert" aria-live="polite"></div>
-    <div
+    <label
       class="upload-area"
-      role="button"
+      for="file-input"
       tabindex="0"
-      aria-label="Selecionar vídeo para upload"
-      onclick="document.getElementById('file-input').click()"
       onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
     >
       <p>Clique para selecionar um vídeo</p>
       <p style="font-size:.8rem;color:#666;margin-top:4px;">MP4, AVI, MOV, MKV, WMV, FLV, WEBM</p>
-      <input type="file" id="file-input" accept="video/*" style="display:none" onchange="doUpload(this)" aria-hidden="true" />
-    </div>
+      <input type="file" id="file-input" accept="video/*" style="display:none" onchange="doUpload(this)" />
+    </label>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <strong style="font-size:.9rem;">Histórico</strong>
       <button class="refresh-btn" onclick="loadVideos()">Atualizar</button>
@@ -191,8 +189,10 @@
     }).join('');
   }
 
-  if (token) { show('view-dashboard'); loadVideos(); }
-  else showLogin();
+  (async () => {
+    if (token) { show('view-dashboard'); await loadVideos(); }
+    else showLogin();
+  })();
 </script>
 </body>
 </html>

@@ -12,12 +12,13 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o auth-service ./cmd/auth
 # Stage 2: final image
 FROM alpine:3.20
 
-RUN apk --no-cache add ca-certificates tzdata
+RUN apk --no-cache add ca-certificates tzdata && addgroup -S appgroup && adduser -S -G appgroup appuser
 
 WORKDIR /app
 
 COPY --from=builder /app/auth-service .
 
+USER appuser
 EXPOSE 8081
 
 ENTRYPOINT ["./auth-service"]
