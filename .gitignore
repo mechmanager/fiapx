@@ -1,0 +1,36 @@
+# Binários
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+api-gateway/api-gateway
+worker/worker
+
+# Saída de testes / cobertura
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Artefatos de runtime
+uploads/
+outputs/
+temp/
+
+# macOS / IDE
+.DS_Store
+*.log
+
+# Variáveis de ambiente locais
+.env
+
+# Kubernetes — secrets nunca devem ser versionados
+k8s/secrets.yaml
+
+# Terraform — state e cache local
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/terraform.tfvars
