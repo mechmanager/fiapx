@@ -68,8 +68,13 @@ func (p *Processor) Process(_ context.Context, videoReader io.Reader, videoFilen
 }
 
 // runFFmpeg executa o ffmpeg extraindo 1 frame por segundo.
+// LookPath resolve o binário para um caminho absoluto antes da execução.
 func runFFmpeg(videoPath, framePattern string) error {
-	cmd := exec.Command("ffmpeg",
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return fmt.Errorf("ffmpeg não encontrado: %w", err)
+	}
+	cmd := exec.Command(ffmpegPath,
 		"-i", videoPath,
 		"-vf", "fps=1",
 		"-y",
