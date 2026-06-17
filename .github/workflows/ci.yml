@@ -13,10 +13,10 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Lint e formatação
+  # Lint e formatação — um job por módulo
   # ---------------------------------------------------------------------------
   lint:
-    name: Lint
+    name: Lint (${{ matrix.module }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -50,12 +50,28 @@ jobs:
         run: go vet ./...
 
   # ---------------------------------------------------------------------------
-  # Testes unitários por módulo
+  # Testes e cobertura — um job por módulo
   # ---------------------------------------------------------------------------
   test:
-    name: Testes
+    name: Testes (${{ matrix.module }})
     runs-on: ubuntu-latest
     needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: api-gateway
+            packages: ./config/... ./middleware/... ./proxy/...
+          - module: auth-service
+            packages: ./config/... ./domain/... ./service/... ./handler/...
+          - module: upload-service
+            packages: ./config/... ./domain/... ./service/... ./handler/...
+          - module: status-service
+            packages: ./config/... ./domain/... ./service/... ./handler/...
+          - module: notification-service
+            packages: ./config/... ./domain/... ./mailer/...
+          - module: worker
+            packages: ./config/... ./pipeline/... ./notification/... ./processor/...
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,88 +80,25 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: |
-            api-gateway/go.sum
-            auth-service/go.sum
-            upload-service/go.sum
-            status-service/go.sum
-            notification-service/go.sum
-            worker/go.sum
+          cache-dependency-path: ${{ matrix.module }}/go.sum
 
-      - name: Testes api-gateway
-        working-directory: api-gateway
+      - name: Testes
+        working-directory: ${{ matrix.module }}
         run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./middleware/... ./proxy/...
+          go test -coverprofile=coverage.out ${{ matrix.packages }}
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura api-gateway: ${total}%"
+          echo "Cobertura ${{ matrix.module }}: ${total}%"
           awk "BEGIN { exit !($total >= 80) }" || \
             (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
 
-      - name: Testes auth-service
-        working-directory: auth-service
-        run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./domain/... ./service/... ./handler/...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura auth-service: ${total}%"
-          awk "BEGIN { exit !($total >= 80) }" || \
-            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Testes upload-service
-        working-directory: upload-service
-        run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./domain/... ./service/... ./handler/...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura upload-service: ${total}%"
-          awk "BEGIN { exit !($total >= 80) }" || \
-            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Testes status-service
-        working-directory: status-service
-        run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./domain/... ./service/... ./handler/...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura status-service: ${total}%"
-          awk "BEGIN { exit !($total >= 80) }" || \
-            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Testes notification-service
-        working-directory: notification-service
-        run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./domain/... ./mailer/...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura notification-service: ${total}%"
-          awk "BEGIN { exit !($total >= 80) }" || \
-            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Testes worker
-        working-directory: worker
-        run: |
-          go test -coverprofile=coverage.out \
-            ./config/... ./pipeline/... ./notification/... ./processor/...
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
-          echo "Cobertura worker: ${total}%"
-          awk "BEGIN { exit !($total >= 80) }" || \
-            (echo "FALHA: cobertura abaixo de 80% ($total%)" && exit 1)
-
-      - name: Upload relatórios de cobertura
+      - name: Upload cobertura
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-reports
-          path: |
-            api-gateway/coverage.out
-            auth-service/coverage.out
-            upload-service/coverage.out
-            status-service/coverage.out
-            notification-service/coverage.out
-            worker/coverage.out
+          name: coverage-${{ matrix.module }}
+          path: ${{ matrix.module }}/coverage.out
 
   # ---------------------------------------------------------------------------
-  # SonarCloud
+  # SonarCloud — agrega todos os relatórios de cobertura
   # ---------------------------------------------------------------------------
   sonar:
     name: SonarCloud
@@ -159,7 +112,8 @@ jobs:
       - name: Download relatórios de cobertura
         uses: actions/download-artifact@v4
         with:
-          name: coverage-reports
+          pattern: coverage-*
+          merge-multiple: true
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
@@ -168,10 +122,10 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # Build e push das imagens Docker
+  # Build Docker — um job por serviço
   # ---------------------------------------------------------------------------
   docker:
-    name: Docker Build
+    name: Docker (${{ matrix.service }})
     runs-on: ubuntu-latest
     needs: test
     permissions:
