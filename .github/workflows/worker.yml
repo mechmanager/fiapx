@@ -1,0 +1,88 @@
+name: worker
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "worker/**"
+      - ".github/workflows/worker.yml"
+  pull_request:
+    paths:
+      - "worker/**"
+
+concurrency:
+  group: worker-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/fiapx
+
+jobs:
+  lint-and-test:
+    name: Lint e Testes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: worker/go.sum
+
+      - name: gofmt
+        run: |
+          bad=$(gofmt -l ./worker)
+          if [ -n "$bad" ]; then echo "$bad"; exit 1; fi
+
+      - name: go vet
+        working-directory: worker
+        run: go vet ./...
+
+      - name: Testes e cobertura
+        working-directory: worker
+        run: |
+          go test -coverprofile=coverage.out ./config/... ./pipeline/... ./notification/... ./processor/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/,""); print $3}')
+          echo "Cobertura: ${total}%"
+          awk "BEGIN { exit !($total >= 80) }" || (echo "FALHA: ${total}% < 80%" && exit 1)
+
+  docker:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Login GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Metadados
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+      - name: Build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

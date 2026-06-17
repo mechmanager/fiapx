@@ -1,0 +1,35 @@
+name: sonar
+
+on:
+  push:
+    branches: [main, develop]
+
+jobs:
+  sonar:
+    name: SonarCloud
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: "1.25"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Gerar relatórios de cobertura
+        run: |
+          cd api-gateway       && go test -coverprofile=coverage.out ./config/... ./middleware/... ./proxy/...       && cd ..
+          cd auth-service      && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
+          cd upload-service    && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
+          cd status-service    && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
+          cd notification-service && go test -coverprofile=coverage.out ./config/... ./domain/... ./mailer/... && cd ..
+          cd worker            && go test -coverprofile=coverage.out ./config/... ./pipeline/... ./notification/... ./processor/... && cd ..
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

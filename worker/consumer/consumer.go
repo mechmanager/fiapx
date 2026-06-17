@@ -12,24 +12,31 @@ import (
 	"github.com/mechmanager/fiapx/worker/processor"
 )
 
-// Consumer consome mensagens da fila RabbitMQ e delega ao Pipeline.
-type Consumer struct {
-	conn       *amqp.Connection
-	channel    *amqp.Channel
-	queueName  string
-	maxRetries int
-	pipeline   *pipeline.Pipeline
+// Config agrupa as configurações de conexão e comportamento do consumer.
+type Config struct {
+	URL           string
+	QueueName     string
+	PrefetchCount int
+	MaxRetries    int
 }
 
+// Consumer consome mensagens da fila RabbitMQ e delega ao Pipeline.
+type Consumer struct {
+	conn     *amqp.Connection
+	channel  *amqp.Channel
+	cfg      Config
+	pipeline *pipeline.Pipeline
+}
+
+// New cria e configura o consumer RabbitMQ.
 func New(
-	url, queueName string,
-	prefetchCount, maxRetries int,
+	cfg Config,
 	videos domain.VideoRepository,
 	stor domain.ObjectStorage,
 	proc pipeline.VideoProcessor,
 	notifier domain.Notifier,
 ) (*Consumer, error) {
-	conn, err := amqp.Dial(url)
+	conn, err := amqp.Dial(cfg.URL)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao conectar no RabbitMQ: %w", err)
 	}
@@ -40,13 +47,13 @@ func New(
 		return nil, fmt.Errorf("erro ao abrir canal: %w", err)
 	}
 
-	if err := ch.Qos(prefetchCount, 0, false); err != nil {
+	if err := ch.Qos(cfg.PrefetchCount, 0, false); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao configurar QoS: %w", err)
 	}
 
-	dlq := queueName + ".dlq"
+	dlq := cfg.QueueName + ".dlq"
 	if _, err = ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
@@ -57,26 +64,27 @@ func New(
 		"x-dead-letter-exchange":    "",
 		"x-dead-letter-routing-key": dlq,
 	}
-	if _, err = ch.QueueDeclare(queueName, true, false, false, false, args); err != nil {
+	if _, err = ch.QueueDeclare(cfg.QueueName, true, false, false, false, args); err != nil {
 		_ = ch.Close()
 		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao declarar fila: %w", err)
 	}
 
 	return &Consumer{
-		conn: conn, channel: ch, queueName: queueName,
-		maxRetries: maxRetries,
-		pipeline:   pipeline.New(videos, stor, proc, notifier),
+		conn:     conn,
+		channel:  ch,
+		cfg:      cfg,
+		pipeline: pipeline.New(videos, stor, proc, notifier),
 	}, nil
 }
 
 func (c *Consumer) Run(ctx context.Context) error {
-	msgs, err := c.channel.Consume(c.queueName, "", false, false, false, false, nil)
+	msgs, err := c.channel.Consume(c.cfg.QueueName, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar consumo: %w", err)
 	}
 
-	log.Printf("worker aguardando mensagens na fila %q (maxRetries=%d)", c.queueName, c.maxRetries)
+	log.Printf("worker aguardando mensagens na fila %q (maxRetries=%d)", c.cfg.QueueName, c.cfg.MaxRetries)
 
 	for {
 		select {
@@ -102,8 +110,8 @@ func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
 	}
 
 	retries := xDeathCount(msg)
-	if retries >= c.maxRetries {
-		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.maxRetries)
+	if retries >= c.cfg.MaxRetries {
+		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.cfg.MaxRetries)
 		if err := msg.Nack(false, false); err != nil {
 			log.Printf("[WARN] nack error: %v", err)
 		}

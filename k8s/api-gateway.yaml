@@ -17,27 +17,20 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-api-gateway:latest
+          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-api-gateway:sha-000000
           ports:
             - containerPort: 8080
           envFrom:
             - configMapRef:
-                name: fiapx-config
+                name: fiapx-shared
+            - configMapRef:
+                name: fiapx-gateway-config
           env:
-            - name: DB_DSN
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: fiapx-secrets
                   key: postgres-password
-            - name: RABBITMQ_URL
-              value: amqp://$(RABBITMQ_DEFAULT_USER):$(RABBITMQ_PASSWORD)@rabbitmq:5672/
-            - name: RABBITMQ_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: fiapx-secrets
-                  key: rabbitmq-password
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

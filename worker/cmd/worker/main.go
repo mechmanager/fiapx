@@ -49,7 +49,12 @@ func main() {
 	proc := processor.New()
 
 	c, err := consumer.New(
-		cfg.RabbitMQURL, cfg.QueueName, cfg.PrefetchCount, cfg.MaxRetries,
+		consumer.Config{
+			URL:           cfg.RabbitMQURL,
+			QueueName:     cfg.QueueName,
+			PrefetchCount: cfg.PrefetchCount,
+			MaxRetries:    cfg.MaxRetries,
+		},
 		videoRepo, minioStorage, proc, notifier,
 	)
 	if err != nil {

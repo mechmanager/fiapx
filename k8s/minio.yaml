@@ -16,7 +16,7 @@ spec:
     spec:
       initContainers:
         - name: create-bucket
-          image: minio/mc:latest
+          image: minio/mc:RELEASE.2024-11-17T19-35-25Z
           command:
             - /bin/sh
             - -c
@@ -36,7 +36,7 @@ spec:
                   key: minio-secret-key
       containers:
         - name: minio
-          image: minio/minio:latest
+          image: minio/minio:RELEASE.2024-11-06T22-26-08Z
           args: ["server", "/data", "--console-address", ":9001"]
           ports:
             - containerPort: 9000

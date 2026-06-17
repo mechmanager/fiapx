@@ -17,12 +17,14 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-worker:latest
+          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-worker:sha-000000
           envFrom:
             - configMapRef:
-                name: fiapx-config
+                name: fiapx-shared
+            - configMapRef:
+                name: fiapx-worker-config
           env:
-            - name: DB_DSN
+            - name: POSTGRES_DSN
               value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
@@ -54,10 +56,6 @@ spec:
               cpu: "1000m"
               memory: "512Mi"
 ---
-# Worker escala baseado em mensagens pendentes na fila.
-# Para integração com métricas do RabbitMQ via KEDA, substitua
-# o HPA abaixo por um ScaledObject do KEDA:
-#   https://keda.sh/docs/scalers/rabbitmq-queue/
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
