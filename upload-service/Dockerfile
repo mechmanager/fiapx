@@ -5,8 +5,14 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-
-COPY . .
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY domain/ ./domain/
+COPY handler/ ./handler/
+COPY queue/ ./queue/
+COPY repository/ ./repository/
+COPY service/ ./service/
+COPY storage/ ./storage/
 RUN CGO_ENABLED=0 GOOS=linux go build -o upload-service ./cmd/upload
 
 # Stage 2: final image

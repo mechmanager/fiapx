@@ -3,7 +3,11 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY middleware/ ./middleware/
+COPY proxy/ ./proxy/
+COPY web/ ./web/
 RUN CGO_ENABLED=0 GOOS=linux go build -o /api-gateway ./cmd/gateway
 
 FROM alpine:3.20

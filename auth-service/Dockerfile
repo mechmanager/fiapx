@@ -5,8 +5,12 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-
-COPY . .
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY domain/ ./domain/
+COPY handler/ ./handler/
+COPY repository/ ./repository/
+COPY service/ ./service/
 RUN CGO_ENABLED=0 GOOS=linux go build -o auth-service ./cmd/auth
 
 # Stage 2: final image

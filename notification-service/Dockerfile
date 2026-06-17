@@ -5,8 +5,12 @@ WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-
-COPY . .
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY consumer/ ./consumer/
+COPY domain/ ./domain/
+COPY mailer/ ./mailer/
+COPY repository/ ./repository/
 RUN CGO_ENABLED=0 GOOS=linux go build -o /notification-service ./cmd/notification
 
 # ---- Estágio final ----

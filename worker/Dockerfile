@@ -7,9 +7,15 @@ WORKDIR /app
 # Copia os manifests primeiro para aproveitar o cache de camadas do Docker.
 COPY go.mod go.sum ./
 RUN go mod download
-
-# Copia o restante do código e compila o binário.
-COPY . .
+COPY cmd/ ./cmd/
+COPY config/ ./config/
+COPY consumer/ ./consumer/
+COPY domain/ ./domain/
+COPY notification/ ./notification/
+COPY pipeline/ ./pipeline/
+COPY processor/ ./processor/
+COPY repository/ ./repository/
+COPY storage/ ./storage/
 RUN CGO_ENABLED=0 GOOS=linux go build -o /worker ./cmd/worker
 
 # ---- Estágio final ----
