@@ -1,15 +1,16 @@
 package notification_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/google/uuid"
 
-	"github.com/mechmanager/fiapx/worker/notification"
+	"github.com/mechmanager/fiapx/worker/mocks"
 )
 
-func TestLogNotifier_NotifyError(t *testing.T) {
-	n := notification.NewLogNotifier()
-	// Apenas garante que não entra em pânico.
-	n.NotifyError(uuid.New(), uuid.New(), "ffmpeg falhou")
+func TestNotifier_NotifyError_NoOp(t *testing.T) {
+	// Garante que o mock do Notifier não entra em pânico quando NotifyErrorFn é nil.
+	n := &mocks.Notifier{}
+	n.NotifyError(context.Background(), uuid.New(), uuid.New(), "video.mp4", "ffmpeg falhou")
 }

@@ -1,4 +1,3 @@
-// Package mocks contém implementações falsas das interfaces do worker para uso em testes.
 package mocks
 
 import (
@@ -39,9 +38,11 @@ func (m *ObjectStorage) UploadFile(ctx context.Context, key, path string) error 
 // --- Notifier ---
 
 type Notifier struct {
-	NotifyErrorFn func(videoID, userID uuid.UUID, reason string)
+	NotifyErrorFn func(ctx context.Context, videoID, userID uuid.UUID, filename, reason string)
 }
 
-func (m *Notifier) NotifyError(videoID, userID uuid.UUID, reason string) {
-	m.NotifyErrorFn(videoID, userID, reason)
+func (m *Notifier) NotifyError(ctx context.Context, videoID, userID uuid.UUID, filename, reason string) {
+	if m.NotifyErrorFn != nil {
+		m.NotifyErrorFn(ctx, videoID, userID, filename, reason)
+	}
 }

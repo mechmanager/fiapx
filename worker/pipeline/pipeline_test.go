@@ -15,7 +15,6 @@ import (
 	"github.com/mechmanager/fiapx/worker/processor"
 )
 
-// mockProcessor implementa pipeline.VideoProcessor para testes sem ffmpeg real.
 type mockProcessor struct {
 	result *processor.Result
 	err    error
@@ -46,18 +45,16 @@ func newPipeline(
 
 func msgBody(t *testing.T, videoID uuid.UUID, s3Key string) []byte {
 	t.Helper()
-	body := `{"video_id":"` + videoID.String() + `","user_id":"` + uuid.New().String() + `","s3_key":"` + s3Key + `"}`
+	body := `{"video_id":"` + videoID.String() + `","user_id":"` + uuid.New().String() + `","s3_key":"` + s3Key + `","filename":"test.mp4"}`
 	return []byte(body)
 }
-
-// --- JSON inválido ---
 
 func TestPipeline_InvalidJSON_Nack(t *testing.T) {
 	p := newPipeline(
 		&mocks.VideoRepository{},
 		&mocks.ObjectStorage{},
 		&mockProcessor{},
-		&mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) {}},
+		&mocks.Notifier{},
 	)
 	ack, err := p.HandleMessage(context.Background(), []byte("nao-e-json"))
 	if ack {
@@ -67,8 +64,6 @@ func TestPipeline_InvalidJSON_Nack(t *testing.T) {
 		t.Errorf("esperava err=nil para JSON inválido, obteve %v", err)
 	}
 }
-
-// --- Erro ao marcar PROCESSING ---
 
 func TestPipeline_UpdateProcessingError(t *testing.T) {
 	videoID := uuid.New()
@@ -81,22 +76,16 @@ func TestPipeline_UpdateProcessingError(t *testing.T) {
 		UpdateDoneFn: func(_ context.Context, _ uuid.UUID, _ string, _ int) error { return nil },
 	}
 	notified := false
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) { notified = true }}
+	notifier := &mocks.Notifier{
+		NotifyErrorFn: func(_ context.Context, _, _ uuid.UUID, _, _ string) { notified = true },
+	}
 	p := newPipeline(videos, &mocks.ObjectStorage{}, &mockProcessor{}, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)
 
-	if ack {
-		t.Error("esperava ack=false")
-	}
-	if err == nil {
-		t.Error("esperava erro")
-	}
-	if !notified {
-		t.Error("esperava NotifyError chamado")
+	if ack || err == nil || !notified {
+		t.Errorf("esperava ack=false, err!=nil, notified=true; obteve ack=%v err=%v notified=%v", ack, err, notified)
 	}
 }
-
-// --- Erro ao baixar vídeo ---
 
 func TestPipeline_DownloadError(t *testing.T) {
 	videoID := uuid.New()
@@ -112,7 +101,9 @@ func TestPipeline_DownloadError(t *testing.T) {
 		},
 	}
 	notified := false
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) { notified = true }}
+	notifier := &mocks.Notifier{
+		NotifyErrorFn: func(_ context.Context, _, _ uuid.UUID, _, _ string) { notified = true },
+	}
 	p := newPipeline(videos, stor, &mockProcessor{}, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)
 
@@ -120,8 +111,6 @@ func TestPipeline_DownloadError(t *testing.T) {
 		t.Errorf("esperava ack=false, err!=nil, notified=true; obteve ack=%v err=%v notified=%v", ack, err, notified)
 	}
 }
-
-// --- Erro no processor ---
 
 func TestPipeline_ProcessorError(t *testing.T) {
 	videoID := uuid.New()
@@ -137,7 +126,9 @@ func TestPipeline_ProcessorError(t *testing.T) {
 		},
 	}
 	notified := false
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) { notified = true }}
+	notifier := &mocks.Notifier{
+		NotifyErrorFn: func(_ context.Context, _, _ uuid.UUID, _, _ string) { notified = true },
+	}
 	proc := &mockProcessor{err: errors.New("ffmpeg falhou")}
 	p := newPipeline(videos, stor, proc, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)
@@ -146,8 +137,6 @@ func TestPipeline_ProcessorError(t *testing.T) {
 		t.Errorf("esperava ack=false, err!=nil, notified=true; obteve ack=%v err=%v notified=%v", ack, err, notified)
 	}
 }
-
-// --- Erro ao fazer upload do zip ---
 
 func TestPipeline_UploadZipError(t *testing.T) {
 	videoID := uuid.New()
@@ -165,7 +154,7 @@ func TestPipeline_UploadZipError(t *testing.T) {
 			return errors.New("minio cheio")
 		},
 	}
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) {}}
+	notifier := &mocks.Notifier{}
 	proc := &mockProcessor{result: &processor.Result{FrameCount: 2}}
 	p := newPipeline(videos, stor, proc, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)
@@ -174,8 +163,6 @@ func TestPipeline_UploadZipError(t *testing.T) {
 		t.Errorf("esperava ack=false, err!=nil; obteve ack=%v err=%v", ack, err)
 	}
 }
-
-// --- Erro no UpdateDone ---
 
 func TestPipeline_UpdateDoneError(t *testing.T) {
 	videoID := uuid.New()
@@ -194,7 +181,9 @@ func TestPipeline_UpdateDoneError(t *testing.T) {
 		},
 		UploadFileFn: func(_ context.Context, _, _ string) error { return nil },
 	}
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) { notified = true }}
+	notifier := &mocks.Notifier{
+		NotifyErrorFn: func(_ context.Context, _, _ uuid.UUID, _, _ string) { notified = true },
+	}
 	proc := &mockProcessor{result: &processor.Result{FrameCount: 2}}
 	p := newPipeline(videos, stor, proc, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)
@@ -203,8 +192,6 @@ func TestPipeline_UpdateDoneError(t *testing.T) {
 		t.Errorf("esperava ack=false, err!=nil, notified=true; obteve ack=%v err=%v notified=%v", ack, err, notified)
 	}
 }
-
-// --- Sucesso completo ---
 
 func TestPipeline_Success(t *testing.T) {
 	videoID := uuid.New()
@@ -224,7 +211,7 @@ func TestPipeline_Success(t *testing.T) {
 		},
 		UploadFileFn: func(_ context.Context, _, _ string) error { return nil },
 	}
-	notifier := &mocks.Notifier{NotifyErrorFn: func(_, _ uuid.UUID, _ string) {}}
+	notifier := &mocks.Notifier{}
 	proc := &mockProcessor{result: &processor.Result{FrameCount: 5}}
 	p := newPipeline(videos, stor, proc, notifier)
 	ack, err := p.HandleMessage(context.Background(), body)

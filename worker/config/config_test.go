@@ -46,7 +46,7 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.PrefetchCount != 5 {
 		t.Errorf("PrefetchCount padrão incorreto: %d", cfg.PrefetchCount)
 	}
-	if cfg.QueueName != "video.process" {
+	if cfg.QueueName != "video.upload" {
 		t.Errorf("QueueName padrão incorreto: %q", cfg.QueueName)
 	}
 }

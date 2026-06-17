@@ -1,5 +1,3 @@
-// Package pipeline implementa o processamento de uma mensagem de vídeo.
-// É completamente independente de RabbitMQ e pode ser testado com mocks simples.
 package pipeline
 
 import (
@@ -17,19 +15,18 @@ import (
 	"github.com/mechmanager/fiapx/worker/processor"
 )
 
-// VideoProcessor abstrai a execução do pipeline ffmpeg → zip.
 type VideoProcessor interface {
 	Process(ctx context.Context, videoReader io.Reader, videoFilename, workDir string) (*processor.Result, error)
 }
 
-// Message é a mensagem recebida da fila (mesmo layout que domain.VideoMessage).
+// Message é a mensagem recebida da fila video.upload.
 type Message struct {
-	VideoID uuid.UUID `json:"video_id"`
-	UserID  uuid.UUID `json:"user_id"`
-	S3Key   string    `json:"s3_key"`
+	VideoID  uuid.UUID `json:"video_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	S3Key    string    `json:"s3_key"`
+	Filename string    `json:"filename"`
 }
 
-// Pipeline encapsula a lógica de processamento de uma mensagem de vídeo.
 type Pipeline struct {
 	videos   domain.VideoRepository
 	storage  domain.ObjectStorage
@@ -37,7 +34,6 @@ type Pipeline struct {
 	notifier domain.Notifier
 }
 
-// New cria um Pipeline com suas dependências.
 func New(
 	videos domain.VideoRepository,
 	stor domain.ObjectStorage,
@@ -48,8 +44,7 @@ func New(
 }
 
 // HandleMessage processa o corpo bruto de uma mensagem AMQP.
-// Retorna (true, nil) em sucesso, (false, err) em falha de processamento e
-// (false, nil) para mensagem mal formada (descartável sem requeue).
+// Retorna (true, nil) em sucesso, (false, err) em falha e (false, nil) para mensagem inválida.
 func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, err error) {
 	var m Message
 	if err := json.Unmarshal(body, &m); err != nil {
@@ -57,12 +52,12 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 		return false, nil
 	}
 
-	log.Printf("processando video_id=%s", m.VideoID)
+	log.Printf("processando video_id=%s filename=%s", m.VideoID, m.Filename)
 
 	if err := p.process(ctx, m); err != nil {
 		log.Printf("[ERRO] video_id=%s: %v", m.VideoID, err)
 		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, err.Error())
-		p.notifier.NotifyError(m.VideoID, m.UserID, err.Error())
+		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, err.Error())
 		return false, err
 	}
 
@@ -86,7 +81,12 @@ func (p *Pipeline) process(ctx context.Context, m Message) error {
 	}
 	defer videoStream.Close()
 
-	result, err := p.proc.Process(ctx, videoStream, filepath.Base(m.S3Key), workDir)
+	filename := m.Filename
+	if filename == "" {
+		filename = filepath.Base(m.S3Key)
+	}
+
+	result, err := p.proc.Process(ctx, videoStream, filename, workDir)
 	if err != nil {
 		return fmt.Errorf("erro no processamento: %w", err)
 	}

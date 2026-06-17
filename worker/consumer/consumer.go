@@ -1,11 +1,11 @@
-// Package consumer implementa o adaptador RabbitMQ que integra o Pipeline ao broker.
-// A lógica de processamento fica em worker/pipeline, isolada e totalmente testável.
 package consumer
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"log"
+	"sync"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -16,16 +16,19 @@ import (
 
 // Consumer consome mensagens da fila RabbitMQ e delega ao Pipeline.
 type Consumer struct {
-	conn      *amqp.Connection
-	channel   *amqp.Channel
-	queueName string
-	pipeline  *pipeline.Pipeline
+	conn       *amqp.Connection
+	channel    *amqp.Channel
+	queueName  string
+	maxRetries int
+	pipeline   *pipeline.Pipeline
+
+	mu      sync.Mutex
+	retries map[[16]byte]int // hash do body → contagem de tentativas
 }
 
-// New conecta ao RabbitMQ, configura o prefetch e devolve o consumer pronto.
 func New(
 	url, queueName string,
-	prefetchCount int,
+	prefetchCount, maxRetries int,
 	videos domain.VideoRepository,
 	stor domain.ObjectStorage,
 	proc pipeline.VideoProcessor,
@@ -48,8 +51,20 @@ func New(
 		return nil, fmt.Errorf("erro ao configurar QoS: %w", err)
 	}
 
-	_, err = ch.QueueDeclare(queueName, true, false, false, false, nil)
-	if err != nil {
+	// Declara a DLQ antes da fila principal.
+	dlq := queueName + ".dlq"
+	if _, err = ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
+		ch.Close()
+		conn.Close()
+		return nil, fmt.Errorf("erro ao declarar DLQ: %w", err)
+	}
+
+	// Fila principal configurada com dead-letter para a DLQ.
+	args := amqp.Table{
+		"x-dead-letter-exchange":    "",
+		"x-dead-letter-routing-key": dlq,
+	}
+	if _, err = ch.QueueDeclare(queueName, true, false, false, false, args); err != nil {
 		ch.Close()
 		conn.Close()
 		return nil, fmt.Errorf("erro ao declarar fila: %w", err)
@@ -57,18 +72,19 @@ func New(
 
 	return &Consumer{
 		conn: conn, channel: ch, queueName: queueName,
-		pipeline: pipeline.New(videos, stor, proc, notifier),
+		maxRetries: maxRetries,
+		retries:    make(map[[16]byte]int),
+		pipeline:   pipeline.New(videos, stor, proc, notifier),
 	}, nil
 }
 
-// Run inicia o loop de consumo bloqueante. Retorna apenas quando ctx é cancelado.
 func (c *Consumer) Run(ctx context.Context) error {
 	msgs, err := c.channel.Consume(c.queueName, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("erro ao iniciar consumo: %w", err)
 	}
 
-	log.Printf("worker aguardando mensagens na fila %q", c.queueName)
+	log.Printf("worker aguardando mensagens na fila %q (maxRetries=%d)", c.queueName, c.maxRetries)
 
 	for {
 		select {
@@ -78,21 +94,43 @@ func (c *Consumer) Run(ctx context.Context) error {
 			if !ok {
 				return fmt.Errorf("canal RabbitMQ fechado inesperadamente")
 			}
-			ack, _ := c.pipeline.HandleMessage(ctx, msg.Body)
-			if ack {
-				msg.Ack(false)
-			} else {
-				msg.Nack(false, false)
-			}
+			c.handle(ctx, msg)
 		}
 	}
 }
 
-// Close encerra a conexão com o RabbitMQ.
+func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
+	key := md5.Sum(msg.Body)
+	ack, _ := c.pipeline.HandleMessage(ctx, msg.Body)
+
+	if ack {
+		c.mu.Lock()
+		delete(c.retries, key)
+		c.mu.Unlock()
+		msg.Ack(false)
+		return
+	}
+
+	c.mu.Lock()
+	c.retries[key]++
+	count := c.retries[key]
+	c.mu.Unlock()
+
+	if count >= c.maxRetries {
+		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.maxRetries)
+		c.mu.Lock()
+		delete(c.retries, key)
+		c.mu.Unlock()
+		msg.Nack(false, false) // sem requeue → vai para DLQ
+	} else {
+		msg.Nack(false, true) // requeue para nova tentativa
+	}
+}
+
 func (c *Consumer) Close() {
 	c.channel.Close()
 	c.conn.Close()
 }
 
-// Garante que *processor.Processor satisfaz VideoProcessor (checagem em compilação).
+// Garante que *processor.Processor satisfaz VideoProcessor em compilação.
 var _ pipeline.VideoProcessor = (*processor.Processor)(nil)
