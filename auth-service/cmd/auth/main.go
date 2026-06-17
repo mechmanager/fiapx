@@ -1,9 +1,10 @@
-// Command auth is the entry point for the auth-service.
 package main
 
 import (
 	"context"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -29,14 +30,23 @@ func main() {
 	authSvc := service.NewAuthService(userRepo, jwtManager)
 	authHandler := handler.NewAuthHandler(authSvc)
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.Health)
 	r.POST("/auth/register", authHandler.Register)
 	r.POST("/auth/login", authHandler.Login)
 
+	srv := &http.Server{
+		Addr:         ":" + cfg.AuthPort,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	log.Printf("auth-service listening on :%s", cfg.AuthPort)
-	if err := r.Run(":" + cfg.AuthPort); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

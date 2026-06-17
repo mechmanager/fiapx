@@ -1,4 +1,3 @@
-// Package consumer implementa o consumidor de mensagens de notificação do RabbitMQ.
 package consumer
 
 import (
@@ -46,47 +45,34 @@ func New(rabbitURL, queueName string, maxRetries int, userRepo domain.UserReposi
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao abrir canal RabbitMQ: %w", err)
 	}
 
-	// Declara a DLQ primeiro.
-	_, err = ch.QueueDeclare(
-		queueName+".dlq",
-		true,  // durable
-		false, // autoDelete
-		false, // exclusive
-		false, // noWait
-		nil,
-	)
+	_, err = ch.QueueDeclare(queueName+".dlq", true, false, false, false, nil)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao declarar DLQ: %w", err)
 	}
 
-	// Declara a fila principal com DLQ configurada.
 	_, err = ch.QueueDeclare(
 		queueName,
-		true,  // durable
-		false, // autoDelete
-		false, // exclusive
-		false, // noWait
+		true, false, false, false,
 		amqp.Table{
 			"x-dead-letter-exchange":    "",
 			"x-dead-letter-routing-key": queueName + ".dlq",
 		},
 	)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao declarar fila: %w", err)
 	}
 
-	// Prefetch de 5 mensagens.
 	if err := ch.Qos(5, 0, false); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao configurar QoS: %w", err)
 	}
 
@@ -103,24 +89,20 @@ func New(rabbitURL, queueName string, maxRetries int, userRepo domain.UserReposi
 // Close libera os recursos do consumidor.
 func (c *NotificationConsumer) Close() {
 	if c.channel != nil {
-		c.channel.Close()
+		if err := c.channel.Close(); err != nil {
+			log.Printf("[WARN] channel close: %v", err)
+		}
 	}
 	if c.conn != nil {
-		c.conn.Close()
+		if err := c.conn.Close(); err != nil {
+			log.Printf("[WARN] connection close: %v", err)
+		}
 	}
 }
 
 // Run inicia o loop de consumo de mensagens.
 func (c *NotificationConsumer) Run(ctx context.Context) error {
-	msgs, err := c.channel.Consume(
-		c.queue,
-		"",    // consumer tag
-		false, // autoAck
-		false, // exclusive
-		false, // noLocal
-		false, // noWait
-		nil,
-	)
+	msgs, err := c.channel.Consume(c.queue, "", false, false, false, false, nil)
 	if err != nil {
 		return fmt.Errorf("erro ao registrar consumidor: %w", err)
 	}
@@ -141,12 +123,13 @@ func (c *NotificationConsumer) Run(ctx context.Context) error {
 	}
 }
 
-// handle processa uma mensagem individual.
 func (c *NotificationConsumer) handle(ctx context.Context, msg amqp.Delivery) {
 	var notification NotificationMessage
 	if err := json.Unmarshal(msg.Body, &notification); err != nil {
 		log.Printf("erro ao deserializar mensagem: %v — enviando para DLQ", err)
-		msg.Nack(false, false)
+		if err := msg.Nack(false, false); err != nil {
+			log.Printf("[WARN] nack error: %v", err)
+		}
 		return
 	}
 
@@ -158,41 +141,53 @@ func (c *NotificationConsumer) handle(ctx context.Context, msg amqp.Delivery) {
 	}
 
 	if email == "" {
-		log.Printf("usuário %s não encontrado, descartando notificação para vídeo %s",
-			notification.UserID, notification.VideoID)
-		msg.Ack(false)
+		log.Printf("usuário %s não encontrado, descartando notificação", notification.UserID)
+		if err := msg.Ack(false); err != nil {
+			log.Printf("[WARN] ack error: %v", err)
+		}
 		return
 	}
 
 	body := fmt.Sprintf(emailBodyFmt, notification.Filename, notification.Error)
 	if err := c.mailer.Send(email, emailSubject, body); err != nil {
-		log.Printf("erro ao enviar e-mail para %s: %v", email, err)
+		log.Printf("erro ao enviar e-mail: %v", err)
 		c.nackWithRetry(msg)
 		return
 	}
 
-	log.Printf("notificação enviada para %s (vídeo %s)", email, notification.VideoID)
-	msg.Ack(false)
+	log.Printf("notificação enviada para vídeo %s", notification.VideoID)
+	if err := msg.Ack(false); err != nil {
+		log.Printf("[WARN] ack error: %v", err)
+	}
 }
 
-// nackWithRetry faz nack verificando o contador de retentativas.
 func (c *NotificationConsumer) nackWithRetry(msg amqp.Delivery) {
-	retries := int64(0)
-	if xDeath, ok := msg.Headers["x-death"]; ok {
-		if deathList, ok := xDeath.([]interface{}); ok && len(deathList) > 0 {
-			if deathMap, ok := deathList[0].(amqp.Table); ok {
-				if count, ok := deathMap["count"].(int64); ok {
-					retries = count
-				}
-			}
-		}
-	}
-
-	if int(retries) >= c.maxRetries {
+	retries := xDeathCount(msg)
+	if retries >= c.maxRetries {
 		log.Printf("mensagem excedeu %d tentativas, enviando para DLQ", c.maxRetries)
-		msg.Nack(false, false)
+		if err := msg.Nack(false, false); err != nil {
+			log.Printf("[WARN] nack error: %v", err)
+		}
 		return
 	}
+	if err := msg.Nack(false, true); err != nil {
+		log.Printf("[WARN] nack error: %v", err)
+	}
+}
 
-	msg.Nack(false, true) // requeue
+func xDeathCount(msg amqp.Delivery) int {
+	xDeath, ok := msg.Headers["x-death"]
+	if !ok {
+		return 0
+	}
+	deathList, ok := xDeath.([]interface{})
+	if !ok || len(deathList) == 0 {
+		return 0
+	}
+	deathMap, ok := deathList[0].(amqp.Table)
+	if !ok {
+		return 0
+	}
+	count, _ := deathMap["count"].(int64)
+	return int(count)
 }

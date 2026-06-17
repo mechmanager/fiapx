@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -22,17 +24,14 @@ func main() {
 
 	ctx := context.Background()
 
-	// Pool de conexões com o PostgreSQL.
 	pool, err := repository.NewPool(ctx, cfg.PostgresDSN)
 	if err != nil {
 		log.Fatalf("erro ao conectar no banco: %v", err)
 	}
 	defer pool.Close()
 
-	// Repositório de vídeos.
 	videoRepo := repository.NewVideoRepo(pool)
 
-	// Object storage (MinIO).
 	minioStorage, err := storage.NewMinIOStorage(
 		cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey,
 		cfg.MinIOBucket, cfg.MinIOUseSSL,
@@ -41,25 +40,31 @@ func main() {
 		log.Fatalf("erro ao conectar no MinIO: %v", err)
 	}
 
-	// Cache Redis.
 	redisCache, err := cache.NewRedisCache(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("erro ao conectar no Redis: %v", err)
 	}
 
-	// Serviço e handler.
 	statusSvc := service.NewStatusService(videoRepo, minioStorage, redisCache)
 	statusHandler := handler.NewStatusHandler(statusSvc)
 
-	// Roteador Gin.
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.Health)
 	r.GET("/videos", statusHandler.List)
 	r.GET("/videos/:id/download", statusHandler.Download)
 
+	srv := &http.Server{
+		Addr:         ":" + cfg.StatusPort,
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 120 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	log.Printf("status-service escutando na porta %s", cfg.StatusPort)
-	if err := r.Run(":" + cfg.StatusPort); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("erro ao iniciar servidor: %v", err)
 	}
 }

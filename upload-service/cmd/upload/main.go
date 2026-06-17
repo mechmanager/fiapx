@@ -1,9 +1,10 @@
-// Command upload is the entry point for the upload-service.
 package main
 
 import (
 	"context"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -47,13 +48,22 @@ func main() {
 	uploadSvc := service.NewUploadService(videoRepo, minioStorage, publisher)
 	uploadHandler := handler.NewUploadHandler(uploadSvc)
 
-	r := gin.Default()
+	r := gin.New()
+	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.Health)
 	r.POST("/videos", uploadHandler.Upload)
 
+	srv := &http.Server{
+		Addr:         ":" + cfg.UploadPort,
+		Handler:      r,
+		ReadTimeout:  60 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
 	log.Printf("upload-service listening on :%s", cfg.UploadPort)
-	if err := r.Run(":" + cfg.UploadPort); err != nil {
+	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
 }

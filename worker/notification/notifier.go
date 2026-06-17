@@ -26,15 +26,14 @@ func NewRabbitMQNotifier(url, queueName string) (*RabbitMQNotifier, error) {
 	}
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("notifier: erro ao abrir canal: %w", err)
 	}
-	// Declara a fila de notificação com DLQ.
 	dlq := queueName + ".dlq"
 	_, err = ch.QueueDeclare(dlq, true, false, false, false, nil)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("notifier: erro ao declarar DLQ: %w", err)
 	}
 	args := amqp.Table{
@@ -43,8 +42,8 @@ func NewRabbitMQNotifier(url, queueName string) (*RabbitMQNotifier, error) {
 	}
 	_, err = ch.QueueDeclare(queueName, true, false, false, false, args)
 	if err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("notifier: erro ao declarar fila: %w", err)
 	}
 	return &RabbitMQNotifier{conn: conn, channel: ch, queueName: queueName}, nil
@@ -73,6 +72,10 @@ func (n *RabbitMQNotifier) NotifyError(_ context.Context, videoID, userID uuid.U
 }
 
 func (n *RabbitMQNotifier) Close() {
-	n.channel.Close()
-	n.conn.Close()
+	if err := n.channel.Close(); err != nil {
+		log.Printf("[WARN] notifier channel close: %v", err)
+	}
+	if err := n.conn.Close(); err != nil {
+		log.Printf("[WARN] notifier connection close: %v", err)
+	}
 }

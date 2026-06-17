@@ -36,20 +36,20 @@ func New(
 
 	ch, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao abrir canal: %w", err)
 	}
 
 	if err := ch.Qos(prefetchCount, 0, false); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao configurar QoS: %w", err)
 	}
 
 	dlq := queueName + ".dlq"
 	if _, err = ch.QueueDeclare(dlq, true, false, false, false, nil); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao declarar DLQ: %w", err)
 	}
 
@@ -58,8 +58,8 @@ func New(
 		"x-dead-letter-routing-key": dlq,
 	}
 	if _, err = ch.QueueDeclare(queueName, true, false, false, false, args); err != nil {
-		ch.Close()
-		conn.Close()
+		_ = ch.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("erro ao declarar fila: %w", err)
 	}
 
@@ -95,20 +95,26 @@ func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
 	ack, _ := c.pipeline.HandleMessage(ctx, msg.Body)
 
 	if ack {
-		msg.Ack(false)
+		if err := msg.Ack(false); err != nil {
+			log.Printf("[WARN] ack error: %v", err)
+		}
 		return
 	}
 
 	retries := xDeathCount(msg)
 	if retries >= c.maxRetries {
 		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.maxRetries)
-		msg.Nack(false, false)
+		if err := msg.Nack(false, false); err != nil {
+			log.Printf("[WARN] nack error: %v", err)
+		}
 	} else {
-		msg.Nack(false, true)
+		if err := msg.Nack(false, true); err != nil {
+			log.Printf("[WARN] nack error: %v", err)
+		}
 	}
 }
 
-// xDeathCount lê o número de mortes (tentativas) do header x-death do RabbitMQ.
+// xDeathCount lê o número de mortes do header x-death do RabbitMQ.
 func xDeathCount(msg amqp.Delivery) int {
 	xDeath, ok := msg.Headers["x-death"]
 	if !ok {
@@ -127,8 +133,12 @@ func xDeathCount(msg amqp.Delivery) int {
 }
 
 func (c *Consumer) Close() {
-	c.channel.Close()
-	c.conn.Close()
+	if err := c.channel.Close(); err != nil {
+		log.Printf("[WARN] channel close error: %v", err)
+	}
+	if err := c.conn.Close(); err != nil {
+		log.Printf("[WARN] connection close error: %v", err)
+	}
 }
 
 var _ pipeline.VideoProcessor = (*processor.Processor)(nil)
