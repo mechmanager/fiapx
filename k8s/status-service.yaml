@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: status-service
+  namespace: fiapx
+  labels:
+    app: status-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: status-service
+  template:
+    metadata:
+      labels:
+        app: status-service
+    spec:
+      containers:
+        - name: status-service
+          image: ghcr.io/mechmanager/fiapx-status-service:sha-000000
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: fiapx-shared
+            - configMapRef:
+                name: fiapx-status-config
+          env:
+            - name: POSTGRES_DSN
+              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fiapx-secrets
+                  key: postgres-password
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fiapx-secrets
+                  key: minio-access-key
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fiapx-secrets
+                  key: minio-secret-key
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: status-service
+  namespace: fiapx
+spec:
+  selector:
+    app: status-service
+  ports:
+    - port: 8083
+      targetPort: 8083

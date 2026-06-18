@@ -9,6 +9,7 @@ import (
 	"github.com/mechmanager/fiapx/api-gateway/middleware"
 	"github.com/mechmanager/fiapx/api-gateway/proxy"
 	apiweb "github.com/mechmanager/fiapx/api-gateway/web"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -32,8 +33,12 @@ func main() {
 
 	jwtChecker := middleware.NewJWTChecker(cfg.JWTSecret)
 	rateLimiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS)
+	metricsMW := middleware.NewMetrics()
+	loggerMW := middleware.NewLogger()
 
 	mux := http.NewServeMux()
+
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -66,7 +71,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.GatewayPort,
-		Handler:      rateLimiter.Middleware(mux),
+		Handler:      rateLimiter.Middleware(metricsMW.Middleware(loggerMW.Middleware(mux))),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,

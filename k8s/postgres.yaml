@@ -23,12 +23,12 @@ spec:
             - name: POSTGRES_DB
               valueFrom:
                 configMapKeyRef:
-                  name: fiapx-config
+                  name: fiapx-shared
                   key: POSTGRES_DB
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
-                  name: fiapx-config
+                  name: fiapx-shared
                   key: POSTGRES_USER
             - name: POSTGRES_PASSWORD
               valueFrom:

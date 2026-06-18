@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-api-gateway:sha-000000
+          image: ghcr.io/mechmanager/fiapx-api-gateway:sha-000000
           ports:
             - containerPort: 8080
           envFrom:

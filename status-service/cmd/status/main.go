@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/mechmanager/fiapx/status-service/cache"
 	"github.com/mechmanager/fiapx/status-service/config"
@@ -50,8 +52,16 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
+		if p.Path == "/health" || p.Path == "/metrics" {
+			return ""
+		}
+		return fmt.Sprintf("service=status-service method=%s path=%s status=%d duration=%s ip=%s\n",
+			p.Method, p.Path, p.StatusCode, p.Latency.Round(time.Millisecond), p.ClientIP)
+	}))
 
 	r.GET("/health", handler.Health)
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/videos", statusHandler.List)
 	r.GET("/videos/:id/download", statusHandler.Download)
 

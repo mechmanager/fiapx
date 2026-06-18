@@ -12,5 +12,16 @@ resources:
   - postgres.yaml
   - rabbitmq.yaml
   - minio.yaml
+  - redis.yaml
+  - auth-service.yaml
+  - upload-service.yaml
+  - status-service.yaml
+  - notification-service.yaml
   - api-gateway.yaml
   - worker.yaml
+  - prometheus.yaml
+  - grafana.yaml
+  - elasticsearch.yaml
+  - logstash.yaml
+  - kibana.yaml
+  - filebeat.yaml

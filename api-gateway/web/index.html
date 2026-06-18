@@ -4,195 +4,437 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FIAP X — Processador de Vídeos</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 40px; width: 100%; max-width: 520px; }
-    h1 { font-size: 1.6rem; color: #1a1a2e; margin-bottom: 4px; }
-    .subtitle { color: #444; font-size: .9rem; margin-bottom: 28px; }
-    label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: 6px; color: #1a1a2e; }
-    input[type=text], input[type=email], input[type=password] {
-      width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px;
-      font-size: .95rem; margin-bottom: 14px; outline: none;
+
+    :root {
+      --bg:       #0b0b14;
+      --surface:  #13131f;
+      --surface2: #1c1c2e;
+      --border:   #2a2a3d;
+      --primary:  #ed0c6e;
+      --primary-h:#c4085b;
+      --accent:   #ff4d8d;
+      --text:     #f0f0f8;
+      --muted:    #8a8aaa;
+      --success:  #10b981;
+      --warning:  #f59e0b;
+      --danger:   #ef4444;
+      --radius:   12px;
     }
-    input:focus { border-color: #3a86ff; }
-    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; transition: background .2s; }
-    .btn-primary { background: #3a86ff; color: #fff; }
-    .btn-primary:hover { background: #2568d9; }
-    .btn-secondary { background: #e9ecef; color: #333; margin-top: 8px; }
-    .btn-secondary:hover { background: #dee2e6; }
-    .link { text-align: center; margin-top: 16px; font-size: .9rem; color: #444; }
-    .link button { background: none; border: none; color: #3a86ff; text-decoration: none; cursor: pointer; font-size: .9rem; padding: 0; }
-    .msg { padding: 10px 14px; border-radius: 8px; font-size: .9rem; margin-bottom: 14px; display: none; }
-    .msg.ok { background: #d4edda; color: #155724; display: block; }
-    .msg.err { background: #f8d7da; color: #721c24; display: block; }
-    .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 14px; cursor: pointer; }
-    .upload-area:hover, .upload-area:focus { border-color: #3a86ff; outline: 2px solid #3a86ff; }
-    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-    th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
-    td { padding: 8px; border-bottom: 1px solid #dee2e6; }
-    .badge { padding: 2px 8px; border-radius: 12px; font-size: .75rem; font-weight: 600; }
-    .badge-pending { background: #fff3cd; color: #5a3a00; }
-    .badge-processing { background: #cfe2ff; color: #002f7a; }
-    .badge-done { background: #d1e7dd; color: #052e16; }
-    .badge-error { background: #f8d7da; color: #44060b; }
-    .hidden { display: none; }
-    #view-dashboard { display: none; }
-    .logout-btn { background: none; border: none; cursor: pointer; color: #444; font-size: .85rem; }
-    .refresh-btn { background: none; border: none; cursor: pointer; color: #3a86ff; font-size: .85rem; }
+
+    body { font-family: 'Inter', Arial, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    #root { min-height: 100vh; display: flex; flex-direction: column; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .app-header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 32px; height: 64px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 0; z-index: 10;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; font-size: 1.25rem; font-weight: 800; letter-spacing: -.5px; }
+    .logo-x { color: var(--primary); margin-left: 2px; }
+    .logo-badge {
+      background: var(--primary); color: #fff; font-size: .68rem; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; letter-spacing: .5px; text-transform: uppercase;
+    }
+    .main { flex: 1; padding: 40px 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    /* Auth */
+    .auth-wrap { min-height: calc(100vh - 64px); display: flex; align-items: center; justify-content: center; padding: 32px 24px; }
+    .auth-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 48px 40px; width: 100%; max-width: 440px; }
+    .auth-card h2 { font-size: 1.6rem; font-weight: 800; margin-bottom: 4px; }
+    .auth-subtitle { color: var(--muted); font-size: .9rem; margin-bottom: 32px; }
+
+    /* Form */
+    .form-group { margin-bottom: 18px; }
+    .form-label { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .form-input { width: 100%; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: .95rem; font-family: inherit; outline: none; transition: border-color .2s; }
+    .form-input:focus { border-color: var(--primary); }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border: none; border-radius: var(--radius); font-size: .95rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .2s, transform .1s, opacity .2s; }
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+    .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-h); }
+    .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-size: .85rem; padding: 8px 16px; }
+    .btn-ghost:hover { color: var(--text); border-color: #666; }
+    .btn-link { background: none; border: none; color: var(--primary); cursor: pointer; font-size: .9rem; font-family: inherit; padding: 0; text-decoration: underline; }
+    .btn-download { background: none; border: 1px solid var(--primary); color: var(--primary); border-radius: 8px; padding: 4px 12px; font-size: .78rem; font-weight: 600; font-family: inherit; cursor: pointer; transition: background .2s, color .2s; white-space: nowrap; }
+    .btn-download:hover:not(:disabled) { background: var(--primary); color: #fff; }
+    .btn-download:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Alert */
+    .alert { padding: 12px 16px; border-radius: var(--radius); font-size: .88rem; margin-bottom: 20px; }
+    .alert-err  { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); color: #fca5a5; }
+    .alert-ok   { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); color: #6ee7b7; }
+
+    /* Upload */
+    .upload-zone { border: 2px dashed var(--border); border-radius: 16px; padding: 36px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; margin-bottom: 28px; position: relative; }
+    .upload-zone:hover, .upload-zone.drag-over { border-color: var(--primary); background: rgba(237,12,110,.04); }
+    .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { width: 52px; height: 52px; background: rgba(237,12,110,.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 1.5rem; }
+    .upload-strong { display: block; font-size: .95rem; font-weight: 600; margin-bottom: 6px; }
+    .upload-hint { color: var(--muted); font-size: .82rem; line-height: 1.7; }
+
+    /* Stats */
+    .stats-bar { display: flex; gap: 12px; margin-bottom: 28px; flex-wrap: wrap; }
+    .stat-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; flex: 1; min-width: 90px; }
+    .stat-value { font-size: 1.5rem; font-weight: 800; display: block; line-height: 1.1; }
+    .stat-label { font-size: .75rem; color: var(--muted); margin-top: 2px; display: block; }
+    .stat-primary .stat-value { color: var(--primary); }
+    .stat-success .stat-value { color: var(--success); }
+    .stat-warning .stat-value { color: var(--warning); }
+
+    /* Section */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .section-title { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .live-dot { width: 8px; height: 8px; background: var(--success); border-radius: 50%; display: inline-block; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* Video cards */
+    .video-list { display: flex; flex-direction: column; gap: 10px; }
+    .video-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; }
+    .video-name { font-size: .9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .video-meta { font-size: .75rem; color: var(--muted); margin-top: 3px; }
+    .action-cell { width: 90px; display: flex; justify-content: flex-end; align-items: center; }
+
+    /* Badges */
+    .badge { padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    .badge-PENDING    { background: rgba(245,158,11,.15); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+    .badge-PROCESSING { background: rgba(59,130,246,.15); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-DONE       { background: rgba(16,185,129,.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,.3); }
+    .badge-ERROR      { background: rgba(239,68,68,.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    /* Spinner */
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.15); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; flex-shrink: 0; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Upload progress */
+    .upload-progress { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .upload-item { display: flex; align-items: center; gap: 10px; font-size: .85rem; }
+    .upload-filename { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* Empty */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty-icon { font-size: 3rem; margin-bottom: 12px; opacity: .35; }
+
+    /* Auth link */
+    .auth-link { text-align: center; margin-top: 20px; font-size: .88rem; color: var(--muted); }
   </style>
 </head>
 <body>
-<div class="card">
-
-  <!-- VIEW: Login -->
-  <div id="view-login">
-    <h1>FIAP X</h1>
-    <p class="subtitle">Processador de Vídeos</p>
-    <div id="login-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label for="login-email">Email</label>
-    <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
-    <label for="login-password">Senha</label>
-    <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password" />
-    <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
-    <p class="link">Não tem conta? <button onclick="showRegister()">Cadastre-se</button></p>
-  </div>
-
-  <!-- VIEW: Register -->
-  <div id="view-register" class="hidden">
-    <h1>Criar conta</h1>
-    <p class="subtitle">FIAP X — Processador de Vídeos</p>
-    <div id="reg-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label for="reg-name">Nome</label>
-    <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" />
-    <label for="reg-email">Email</label>
-    <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" />
-    <label for="reg-password">Senha</label>
-    <input type="password" id="reg-password" placeholder="mínimo 6 caracteres" autocomplete="new-password" />
-    <button class="btn btn-primary" onclick="doRegister()">Criar conta</button>
-    <button class="btn btn-secondary" onclick="showLogin()">Voltar ao login</button>
-  </div>
-
-  <!-- VIEW: Dashboard -->
-  <div id="view-dashboard">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h1>Meus Vídeos</h1>
-      <button class="logout-btn" onclick="doLogout()">Sair</button>
-    </div>
-    <div id="upload-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label
-      class="upload-area"
-      for="file-input"
-      tabindex="0"
-      onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
-    >
-      <p>Clique para selecionar um vídeo</p>
-      <p style="font-size:.8rem;color:#666;margin-top:4px;">MP4, AVI, MOV, MKV, WMV, FLV, WEBM</p>
-      <input type="file" id="file-input" accept="video/*" style="display:none" onchange="doUpload(this)" />
-    </label>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <strong style="font-size:.9rem;">Histórico</strong>
-      <button class="refresh-btn" onclick="loadVideos()">Atualizar</button>
-    </div>
-    <table>
-      <thead><tr><th>Arquivo</th><th>Status</th><th>Ação</th></tr></thead>
-      <tbody id="videos-tbody"><tr><td colspan="3" style="text-align:center;color:#444;">Carregando...</td></tr></tbody>
-    </table>
-  </div>
-
-</div>
+<div id="root"></div>
 <script>
-  let token = localStorage.getItem('fiapx_token') || '';
+const e = React.createElement;
 
-  function show(id) {
-    ['view-login','view-register','view-dashboard'].forEach(v => {
-      document.getElementById(v).style.display = (v === id) ? 'block' : 'none';
-    });
-  }
-  function showLogin()    { clearMsgs(); show('view-login'); }
-  function showRegister() { clearMsgs(); show('view-register'); }
-  function clearMsgs()    { document.querySelectorAll('.msg').forEach(el => { el.className='msg'; el.textContent=''; }); }
-  function setMsg(id, text, ok) { const el=document.getElementById(id); el.textContent=text; el.className='msg '+(ok?'ok':'err'); }
+// ── token store ───────────────────────────────────────────────────────────────
+let _token = localStorage.getItem('fiapx_token') || '';
+const getToken = () => _token;
+const saveToken = t => { _token = t; t ? localStorage.setItem('fiapx_token', t) : localStorage.removeItem('fiapx_token'); };
 
-  async function api(path, opts={}) {
-    const headers = { 'Content-Type': 'application/json', ...opts.headers };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const r = await fetch(path, { ...opts, headers });
-    const body = await r.json().catch(() => ({}));
-    return { ok: r.ok, status: r.status, body };
-  }
+// ── api helper ────────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (_token) headers['Authorization'] = 'Bearer ' + _token;
+  const r = await fetch(path, { ...opts, headers });
+  const body = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, body };
+}
 
-  async function doLogin() {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const { ok, body } = await api('/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
-    if (!ok) { setMsg('login-msg', body.error || 'Erro ao fazer login', false); return; }
-    token = body.token;
-    localStorage.setItem('fiapx_token', token);
-    show('view-dashboard');
-    await loadVideos();
-  }
+async function downloadZip(id, name) {
+  const r = await fetch('/videos/' + id + '/download', { headers: { Authorization: 'Bearer ' + _token } });
+  if (!r.ok) { alert('Erro ao baixar o arquivo'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'frames-' + name + '.zip';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
 
-  async function doRegister() {
-    const name = document.getElementById('reg-name').value;
-    const email = document.getElementById('reg-email').value;
-    const password = document.getElementById('reg-password').value;
-    const { ok, body } = await api('/auth/register', { method:'POST', body: JSON.stringify({ name, email, password }) });
-    if (!ok) { setMsg('reg-msg', body.error || 'Erro ao cadastrar', false); return; }
-    setMsg('reg-msg', 'Conta criada! Faça login.', true);
-    setTimeout(showLogin, 1500);
-  }
+// ── shared components ─────────────────────────────────────────────────────────
+function Spinner() { return e('span', { className: 'spinner' }); }
 
-  function doLogout() {
-    token = ''; localStorage.removeItem('fiapx_token'); showLogin();
-  }
+function Alert({ type, text }) {
+  if (!text) return null;
+  return e('div', { className: 'alert alert-' + type }, text);
+}
 
-  async function doUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('video', file);
-    const r = await fetch('/videos', { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { setMsg('upload-msg', body.error || 'Erro no upload', false); return; }
-    setMsg('upload-msg', 'Vídeo enviado! ID: ' + body.id, true);
-    input.value = '';
-    setTimeout(loadVideos, 800);
+function Badge({ status }) {
+  const labels = { PENDING: 'Pendente', PROCESSING: 'Processando', DONE: 'Concluído', ERROR: 'Erro' };
+  return e('span', { className: 'badge badge-' + status }, labels[status] || status);
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────────
+function LoginView({ onLogin, onGoRegister }) {
+  const [email, setEmail]       = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [error, setError]       = React.useState('');
+  const [loading, setLoading]   = React.useState(false);
+
+  async function submit(ev) {
+    ev.preventDefault(); setError(''); setLoading(true);
+    const { ok, body } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    setLoading(false);
+    if (!ok) { setError(body.error || 'Erro ao fazer login'); return; }
+    saveToken(body.token); onLogin();
   }
 
-  async function loadVideos() {
+  return e('div', { className: 'auth-wrap' },
+    e('div', { className: 'auth-card' },
+      e('h2', null, 'Bem-vindo de volta'),
+      e('p', { className: 'auth-subtitle' }, 'Entre na sua conta para continuar'),
+      e(Alert, { type: 'err', text: error }),
+      e('form', { onSubmit: submit },
+        e('div', { className: 'form-group' },
+          e('label', { className: 'form-label' }, 'Email'),
+          e('input', { className: 'form-input', type: 'email', value: email, onChange: ev => setEmail(ev.target.value), placeholder: 'seu@email.com', required: true, autoComplete: 'email' })
+        ),
+        e('div', { className: 'form-group' },
+          e('label', { className: 'form-label' }, 'Senha'),
+          e('input', { className: 'form-input', type: 'password', value: password, onChange: ev => setPassword(ev.target.value), placeholder: '••••••', required: true, autoComplete: 'current-password' })
+        ),
+        e('button', { className: 'btn btn-primary', type: 'submit', disabled: loading },
+          loading ? e(Spinner) : null, ' Entrar'
+        )
+      ),
+      e('p', { className: 'auth-link' },
+        'Não tem conta? ', e('button', { className: 'btn-link', onClick: onGoRegister }, 'Cadastre-se')
+      )
+    )
+  );
+}
+
+// ── Register ──────────────────────────────────────────────────────────────────
+function RegisterView({ onGoLogin }) {
+  const [name, setName]         = React.useState('');
+  const [email, setEmail]       = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [msg, setMsg]           = React.useState({ type: '', text: '' });
+  const [loading, setLoading]   = React.useState(false);
+
+  async function submit(ev) {
+    ev.preventDefault(); setMsg({ type: '', text: '' }); setLoading(true);
+    const { ok, body } = await api('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+    setLoading(false);
+    if (!ok) { setMsg({ type: 'err', text: body.error || 'Erro ao cadastrar' }); return; }
+    setMsg({ type: 'ok', text: 'Conta criada! Redirecionando...' });
+    setTimeout(onGoLogin, 1500);
+  }
+
+  return e('div', { className: 'auth-wrap' },
+    e('div', { className: 'auth-card' },
+      e('h2', null, 'Criar conta'),
+      e('p', { className: 'auth-subtitle' }, 'Cadastre-se para começar a processar vídeos'),
+      e(Alert, { type: msg.type, text: msg.text }),
+      e('form', { onSubmit: submit },
+        e('div', { className: 'form-group' },
+          e('label', { className: 'form-label' }, 'Nome'),
+          e('input', { className: 'form-input', type: 'text', value: name, onChange: ev => setName(ev.target.value), placeholder: 'Seu nome completo', required: true, autoComplete: 'name' })
+        ),
+        e('div', { className: 'form-group' },
+          e('label', { className: 'form-label' }, 'Email'),
+          e('input', { className: 'form-input', type: 'email', value: email, onChange: ev => setEmail(ev.target.value), placeholder: 'seu@email.com', required: true, autoComplete: 'email' })
+        ),
+        e('div', { className: 'form-group' },
+          e('label', { className: 'form-label' }, 'Senha'),
+          e('input', { className: 'form-input', type: 'password', value: password, onChange: ev => setPassword(ev.target.value), placeholder: 'mínimo 6 caracteres', required: true, autoComplete: 'new-password' })
+        ),
+        e('button', { className: 'btn btn-primary', type: 'submit', disabled: loading },
+          loading ? e(Spinner) : null, ' Criar conta'
+        )
+      ),
+      e('p', { className: 'auth-link' },
+        'Já tem conta? ', e('button', { className: 'btn-link', onClick: onGoLogin }, 'Entrar')
+      )
+    )
+  );
+}
+
+// ── VideoCard ─────────────────────────────────────────────────────────────────
+function VideoCard({ video: v }) {
+  const [downloading, setDownloading] = React.useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    await downloadZip(v.id, v.original_filename.replace(/\.[^.]+$/, ''));
+    setDownloading(false);
+  }
+
+  const date = v.created_at
+    ? new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  const meta = [date, v.frame_count > 0 ? v.frame_count + ' frames' : null, v.status === 'ERROR' && v.error_message ? v.error_message : null]
+    .filter(Boolean).join(' · ');
+
+  return e('div', { className: 'video-card' },
+    e('div', { style: { overflow: 'hidden' } },
+      e('div', { className: 'video-name', title: v.original_filename }, v.original_filename),
+      e('div', { className: 'video-meta' }, meta)
+    ),
+    e(Badge, { status: v.status }),
+    e('div', { className: 'action-cell' },
+      v.status === 'DONE'
+        ? e('button', { className: 'btn-download', onClick: handleDownload, disabled: downloading },
+            downloading ? e(Spinner) : '⬇ ZIP')
+        : (v.status === 'PENDING' || v.status === 'PROCESSING') ? e(Spinner) : null
+    )
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+function DashboardView({ onLogout }) {
+  const [videos, setVideos]     = React.useState([]);
+  const [loadErr, setLoadErr]   = React.useState('');
+  const [uploadMsg, setUploadMsg] = React.useState({ type: '', text: '' });
+  const [uploading, setUploading] = React.useState([]);
+  const [dragOver, setDragOver] = React.useState(false);
+  const pollingRef = React.useRef(null);
+
+  const hasActive = React.useMemo(
+    () => videos.some(v => v.status === 'PENDING' || v.status === 'PROCESSING'),
+    [videos]
+  );
+
+  const fetchVideos = React.useCallback(async () => {
     const { ok, body } = await api('/videos');
-    const tbody = document.getElementById('videos-tbody');
-    if (!ok || !Array.isArray(body)) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo encontrado.</td></tr>';
-      return;
-    }
-    if (body.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo enviado ainda.</td></tr>';
-      return;
-    }
-    const badgeClass = { PENDING:'badge-pending', PROCESSING:'badge-processing', DONE:'badge-done', ERROR:'badge-error' };
-    tbody.innerHTML = body.map(v => {
-      const badge = badgeClass[v.status] || '';
-      let action;
-      if (v.status === 'DONE') {
-        action = `<a href="/videos/${v.id}/download" style="color:#3a86ff;font-size:.85rem;">Baixar ZIP</a>`;
-      } else {
-        action = `<span style="color:#444;font-size:.85rem;">${v.status === 'ERROR' ? (v.error_message || 'Erro') : '—'}</span>`;
+    if (!ok) { setLoadErr('Erro ao carregar vídeos'); return; }
+    setLoadErr('');
+    setVideos(Array.isArray(body) ? body : []);
+  }, []);
+
+  React.useEffect(() => { fetchVideos(); }, []);
+
+  React.useEffect(() => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (hasActive) pollingRef.current = setInterval(fetchVideos, 4000);
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [hasActive, fetchVideos]);
+
+  async function handleFiles(files) {
+    const list = Array.from(files).filter(f => f.type.startsWith('video/') || /\.(mp4|avi|mov|mkv|wmv|flv|webm)$/i.test(f.name));
+    if (!list.length) return;
+    setUploadMsg({ type: '', text: '' });
+    setUploading(list.map(f => ({ name: f.name, done: false, error: false })));
+    let sent = 0;
+    for (let i = 0; i < list.length; i++) {
+      const fd = new FormData();
+      fd.append('video', list[i]);
+      const r = await fetch('/videos', { method: 'POST', headers: { Authorization: 'Bearer ' + getToken() }, body: fd });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setUploading(prev => prev.map((p, j) => j === i ? { ...p, error: true } : p));
+        setUploadMsg({ type: 'err', text: body.error || 'Erro no upload de ' + list[i].name });
+        break;
       }
-      const name = v.original_filename.length > 28 ? v.original_filename.slice(0, 25) + '...' : v.original_filename;
-      return `<tr>
-        <td title="${v.original_filename}">${name}</td>
-        <td><span class="badge ${badge}">${v.status}</span></td>
-        <td>${action}</td>
-      </tr>`;
-    }).join('');
+      sent++;
+      setUploading(prev => prev.map((p, j) => j === i ? { ...p, done: true } : p));
+    }
+    if (sent > 0) setUploadMsg({ type: 'ok', text: sent > 1 ? sent + ' vídeos enviados para processamento!' : 'Vídeo enviado para processamento!' });
+    await fetchVideos();
+    setTimeout(() => { setUploading([]); setUploadMsg({ type: '', text: '' }); }, 5000);
   }
 
-  (async () => {
-    if (token) { show('view-dashboard'); await loadVideos(); }
-    else showLogin();
-  })();
+  function onFileChange(ev) { handleFiles(ev.target.files); ev.target.value = ''; }
+
+  function onDrop(ev) {
+    ev.preventDefault(); setDragOver(false);
+    handleFiles(ev.dataTransfer.files);
+  }
+
+  const stats = React.useMemo(() => ({
+    total: videos.length,
+    done: videos.filter(v => v.status === 'DONE').length,
+    active: videos.filter(v => v.status === 'PENDING' || v.status === 'PROCESSING').length,
+    frames: videos.reduce((acc, v) => acc + (v.frame_count || 0), 0),
+  }), [videos]);
+
+  return e('div', { className: 'main' },
+
+    // Stats
+    videos.length > 0 && e('div', { className: 'stats-bar' },
+      e('div', { className: 'stat-chip' },       e('span', { className: 'stat-value' }, stats.total),  e('span', { className: 'stat-label' }, 'Total')),
+      e('div', { className: 'stat-chip stat-success' }, e('span', { className: 'stat-value' }, stats.done),   e('span', { className: 'stat-label' }, 'Concluídos')),
+      e('div', { className: 'stat-chip stat-warning' }, e('span', { className: 'stat-value' }, stats.active), e('span', { className: 'stat-label' }, 'Processando')),
+      e('div', { className: 'stat-chip stat-primary' }, e('span', { className: 'stat-value' }, stats.frames), e('span', { className: 'stat-label' }, 'Frames extraídos'))
+    ),
+
+    // Upload zone
+    e('div', {
+        className: 'upload-zone' + (dragOver ? ' drag-over' : ''),
+        onDragOver: ev => { ev.preventDefault(); setDragOver(true); },
+        onDragLeave: () => setDragOver(false),
+        onDrop,
+      },
+      e('input', { type: 'file', accept: 'video/*', multiple: true, onChange: onFileChange }),
+      e('div', { className: 'upload-icon' }, '🎬'),
+      e('span', { className: 'upload-strong' }, 'Arraste vídeos aqui ou clique para selecionar'),
+      e('span', { className: 'upload-hint' }, 'MP4 · AVI · MOV · MKV · WMV · FLV · WEBM', e('br'), 'Múltiplos arquivos suportados')
+    ),
+
+    // Upload progress
+    uploading.length > 0 && e('div', { className: 'upload-progress' },
+      uploading.map((f, i) =>
+        e('div', { key: i, className: 'upload-item' },
+          f.done ? '✅' : f.error ? '❌' : e(Spinner),
+          e('span', { className: 'upload-filename' }, f.name)
+        )
+      )
+    ),
+
+    e(Alert, { type: uploadMsg.type, text: uploadMsg.text }),
+
+    // Section header
+    e('div', { className: 'section-header' },
+      e('span', { className: 'section-title' },
+        'Meus Vídeos',
+        hasActive && e('span', { className: 'live-dot', title: 'Atualizando automaticamente' })
+      ),
+      e('button', { className: 'btn btn-ghost', onClick: fetchVideos }, 'Atualizar')
+    ),
+
+    e(Alert, { type: 'err', text: loadErr }),
+
+    videos.length === 0
+      ? e('div', { className: 'empty-state' },
+          e('div', { className: 'empty-icon' }, '📂'),
+          e('p', null, 'Nenhum vídeo enviado ainda.', e('br'), 'Faça upload para começar.')
+        )
+      : e('div', { className: 'video-list' },
+          videos.map(v => e(VideoCard, { key: v.id, video: v }))
+        )
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [view, setView] = React.useState(getToken() ? 'dashboard' : 'login');
+
+  return e('div', null,
+    e('header', { className: 'app-header' },
+      e('div', { className: 'logo' },
+        'FIAP', e('span', { className: 'logo-x' }, 'X'),
+        e('span', { className: 'logo-badge' }, 'Pos Tech')
+      ),
+      view === 'dashboard' && e('button', { className: 'btn btn-ghost', onClick: () => { saveToken(''); setView('login'); } }, 'Sair')
+    ),
+    view === 'login'     && e(LoginView,     { onLogin: () => setView('dashboard'), onGoRegister: () => setView('register') }),
+    view === 'register'  && e(RegisterView,  { onGoLogin: () => setView('login') }),
+    view === 'dashboard' && e(DashboardView, { onLogout: () => { saveToken(''); setView('login'); } })
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(e(App));
 </script>
 </body>
 </html>

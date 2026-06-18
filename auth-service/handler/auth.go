@@ -4,6 +4,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -46,16 +47,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	log.Printf("service=auth-service event=cadastro msg=\"cadastrando novo usuário\" email=%s name=%q", req.Email, req.Name)
+
 	user, err := h.auth.Register(c.Request.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrEmailAlreadyExists) {
+			log.Printf("service=auth-service event=cadastro status=conflito msg=\"e-mail já cadastrado\" email=%s", req.Email)
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("service=auth-service event=cadastro status=erro msg=\"falha ao cadastrar usuário\" email=%s err=%v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
 		return
 	}
 
+	log.Printf("service=auth-service event=cadastro status=ok msg=\"usuário cadastrado com sucesso\" user_id=%s email=%s", user.ID, user.Email)
 	c.JSON(http.StatusCreated, gin.H{
 		"id":    user.ID,
 		"name":  user.Name,
@@ -71,15 +77,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	log.Printf("service=auth-service event=login msg=\"realizando login\" email=%s", req.Email)
+
 	token, err := h.auth.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
+			log.Printf("service=auth-service event=login status=falha msg=\"credenciais inválidas\" email=%s", req.Email)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("service=auth-service event=login status=erro msg=\"falha interna no login\" email=%s err=%v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to login"})
 		return
 	}
 
+	log.Printf("service=auth-service event=login status=ok msg=\"login realizado com sucesso\" email=%s", req.Email)
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }

@@ -1,0 +1,118 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: production
+        type: choice
+        options: [production]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false   # never cancel an in-flight deploy
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: fiapx
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/fiapx
+
+jobs:
+  deploy:
+    name: Deploy EKS
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      id-token: write   # para OIDC com AWS (recomendado sobre access keys)
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      # ── AWS credentials ──────────────────────────────────────────────────────
+      # Opção A (OIDC — mais seguro, sem chaves de longa duração):
+      #   Configure um IAM OIDC Provider para GitHub Actions no seu AWS Account.
+      #   Descomente o bloco abaixo e remova o bloco de access keys.
+      # - name: Configurar credenciais AWS via OIDC
+      #   uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+      #   with:
+      #     role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-fiapx
+      #     aws-region: ${{ env.AWS_REGION }}
+
+      # Opção B (access keys — mais simples para hackathon):
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── kubeconfig ───────────────────────────────────────────────────────────
+      - name: Atualizar kubeconfig para EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      # ── Criar/atualizar Secret do Kubernetes ─────────────────────────────────
+      - name: Aplicar secrets do Kubernetes
+        run: |
+          kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic fiapx-secrets \
+            --namespace fiapx \
+            --from-literal=postgres-password=${{ secrets.POSTGRES_PASSWORD }} \
+            --from-literal=rabbitmq-password=${{ secrets.RABBITMQ_PASSWORD }} \
+            --from-literal=minio-access-key=${{ secrets.MINIO_ACCESS_KEY }} \
+            --from-literal=minio-secret-key=${{ secrets.MINIO_SECRET_KEY }} \
+            --from-literal=jwt-secret=${{ secrets.JWT_SECRET }} \
+            --from-literal=smtp-password=${{ secrets.SMTP_PASSWORD }} \
+            --from-literal=grafana-admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --save-config \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # ── Calcular SHA das imagens ─────────────────────────────────────────────
+      - name: Resolver SHA do commit
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      # ── Substituir placeholders de imagem e aplicar ──────────────────────────
+      - name: Aplicar manifestos Kubernetes
+        run: |
+          SHA=${{ steps.sha.outputs.short }}
+
+          # Substituir sha-000000 pelo SHA real em todos os manifestos
+          find k8s/ -name "*.yaml" -exec \
+            sed -i "s|:sha-000000|:sha-${SHA}|g" {} +
+
+          kubectl apply -k k8s/
+
+      # ── Aguardar rollout ─────────────────────────────────────────────────────
+      - name: Aguardar rollout dos deployments
+        run: |
+          for deploy in api-gateway auth-service upload-service status-service notification-service worker; do
+            echo "→ rollout $deploy"
+            kubectl rollout status deployment/$deploy \
+              --namespace fiapx \
+              --timeout=300s
+          done
+
+      # ── Exibir endpoint público ──────────────────────────────────────────────
+      - name: Endpoint da aplicação
+        run: |
+          echo "Aguardando LoadBalancer..."
+          for i in $(seq 1 12); do
+            LB=$(kubectl get svc api-gateway -n fiapx \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+            if [ -n "$LB" ]; then
+              echo "✓ Aplicação disponível em: http://$LB"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "LoadBalancer ainda não está pronto. Verifique: kubectl get svc -n fiapx"

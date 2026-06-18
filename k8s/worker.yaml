@@ -17,14 +17,14 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/TROQUE_PELO_OWNER/fiapx-worker:sha-000000
+          image: ghcr.io/mechmanager/fiapx-worker:sha-000000
           envFrom:
             - configMapRef:
                 name: fiapx-shared
             - configMapRef:
                 name: fiapx-worker-config
           env:
-            - name: POSTGRES_DSN
+            - name: DB_DSN
               value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:

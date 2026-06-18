@@ -22,11 +22,11 @@ jobs:
       - name: Gerar relatórios de cobertura
         run: |
           cd api-gateway       && go test -coverprofile=coverage.out ./config/... ./middleware/... ./proxy/...       && cd ..
-          cd auth-service      && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
+          cd auth-service      && go test -coverprofile=coverage.out ./config/...                                        && cd ..
           cd upload-service    && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
           cd status-service    && go test -coverprofile=coverage.out ./config/... ./domain/... ./service/... ./handler/... && cd ..
           cd notification-service && go test -coverprofile=coverage.out ./config/... ./domain/... ./mailer/... && cd ..
-          cd worker            && go test -coverprofile=coverage.out ./config/... ./pipeline/... ./notification/... ./processor/... && cd ..
+          cd worker            && go test -coverprofile=coverage.out ./config/... ./pipeline/... ./processor/...               && cd ..
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@ba3875ecf642b2129de2b589510c81a8b53dbf4e

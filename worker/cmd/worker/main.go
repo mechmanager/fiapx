@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/mechmanager/fiapx/worker/config"
 	"github.com/mechmanager/fiapx/worker/consumer"
+	_ "github.com/mechmanager/fiapx/worker/metrics"
 	"github.com/mechmanager/fiapx/worker/notification"
 	"github.com/mechmanager/fiapx/worker/processor"
 	"github.com/mechmanager/fiapx/worker/repository"
@@ -20,6 +24,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("configuração inválida: %v", err)
 	}
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		log.Println("metrics server escutando na porta 9100")
+		if err := http.ListenAndServe(":9100", mux); err != nil {
+			log.Printf("metrics server encerrado: %v", err)
+		}
+	}()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

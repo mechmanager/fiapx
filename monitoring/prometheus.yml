@@ -27,6 +27,11 @@ scrape_configs:
       - targets: ["status-service:8083"]
     metrics_path: /metrics
 
+  - job_name: worker
+    static_configs:
+      - targets: ["worker:9100"]
+    metrics_path: /metrics
+
   - job_name: rabbitmq
     static_configs:
       - targets: ["rabbitmq:15692"]
