@@ -68,6 +68,7 @@ func main() {
 	mux.Handle("POST /videos", jwtChecker.Middleware(uploadProxy))
 	mux.Handle("GET /videos", jwtChecker.Middleware(statusProxy))
 	mux.Handle("GET /videos/{id}/download", jwtChecker.Middleware(statusProxy))
+	mux.Handle("DELETE /videos/{id}", jwtChecker.Middleware(statusProxy))
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.GatewayPort,

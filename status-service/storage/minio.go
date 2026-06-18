@@ -35,3 +35,14 @@ func (s *MinIOStorage) Download(ctx context.Context, key string) (io.ReadCloser,
 	}
 	return obj, nil
 }
+
+// Delete remove um ou mais objetos do bucket. Erros individuais são ignorados (best-effort).
+func (s *MinIOStorage) Delete(ctx context.Context, keys ...string) error {
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		_ = s.client.RemoveObject(ctx, s.bucket, key, minio.RemoveObjectOptions{})
+	}
+	return nil
+}

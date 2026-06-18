@@ -6,10 +6,6 @@ on:
     paths:
       - "api-gateway/**"
       - ".github/workflows/api-gateway.yml"
-  pull_request:
-    paths:
-      - "api-gateway/**"
-
 concurrency:
   group: api-gateway-${{ github.ref }}
   cancel-in-progress: true

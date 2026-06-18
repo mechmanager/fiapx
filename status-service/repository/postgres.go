@@ -62,6 +62,18 @@ func (r *VideoRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]*domain
 	return videos, rows.Err()
 }
 
+// Delete remove o registro do banco. Retorna ErrVideoNotFound se não existir.
+func (r *VideoRepo) Delete(ctx context.Context, id uuid.UUID) error {
+	tag, err := r.db.Exec(ctx, `DELETE FROM videos WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrVideoNotFound
+	}
+	return nil
+}
+
 // FindByID busca um vídeo pelo ID; retorna ErrVideoNotFound se não existir.
 func (r *VideoRepo) FindByID(ctx context.Context, id uuid.UUID) (*domain.Video, error) {
 	const query = `

@@ -27,11 +27,13 @@ type Video struct {
 type VideoRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]*Video, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*Video, error)
+	Delete(ctx context.Context, id uuid.UUID) error
 }
 
 // ObjectStorage define as operações de acesso ao object storage.
 type ObjectStorage interface {
 	Download(ctx context.Context, key string) (io.ReadCloser, error)
+	Delete(ctx context.Context, keys ...string) error
 }
 
 // StatusCache define as operações de cache de status de vídeos.

@@ -64,6 +64,7 @@ func main() {
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.GET("/videos", statusHandler.List)
 	r.GET("/videos/:id/download", statusHandler.Download)
+	r.DELETE("/videos/:id", statusHandler.Delete)
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.StatusPort,

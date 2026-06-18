@@ -6,10 +6,6 @@ on:
     paths:
       - "status-service/**"
       - ".github/workflows/status-service.yml"
-  pull_request:
-    paths:
-      - "status-service/**"
-
 concurrency:
   group: status-service-${{ github.ref }}
   cancel-in-progress: true

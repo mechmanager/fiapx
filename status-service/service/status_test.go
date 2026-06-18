@@ -37,6 +37,8 @@ func (m *mockRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.Video, err
 	return nil, domain.ErrVideoNotFound
 }
 
+func (m *mockRepo) Delete(_ context.Context, _ uuid.UUID) error { return m.err }
+
 type mockStorage struct {
 	stream io.ReadCloser
 	err    error
@@ -45,6 +47,8 @@ type mockStorage struct {
 func (m *mockStorage) Download(_ context.Context, _ string) (io.ReadCloser, error) {
 	return m.stream, m.err
 }
+
+func (m *mockStorage) Delete(_ context.Context, _ ...string) error { return m.err }
 
 type mockCache struct {
 	data map[string]string
@@ -203,6 +207,74 @@ func TestGetDownloadStream_NotFound(t *testing.T) {
 	if !errors.Is(err, domain.ErrVideoNotFound) {
 		t.Errorf("expected ErrVideoNotFound, got %v", err)
 	}
+}
+
+// --- tests: DeleteVideo ---
+
+func TestDeleteVideo_Success(t *testing.T) {
+	v := newVideo("DONE")
+	svc := service.NewStatusService(
+		&mockRepo{videos: []*domain.Video{v}},
+		&mockStorage{},
+		&mockCache{},
+	)
+	if err := svc.DeleteVideo(context.Background(), v.UserID, v.ID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDeleteVideo_NotFound(t *testing.T) {
+	svc := service.NewStatusService(
+		&mockRepo{videos: []*domain.Video{}},
+		&mockStorage{},
+		&mockCache{},
+	)
+	err := svc.DeleteVideo(context.Background(), uuid.New(), uuid.New())
+	if !errors.Is(err, domain.ErrVideoNotFound) {
+		t.Errorf("expected ErrVideoNotFound, got %v", err)
+	}
+}
+
+func TestDeleteVideo_WrongOwner(t *testing.T) {
+	v := newVideo("DONE")
+	svc := service.NewStatusService(
+		&mockRepo{videos: []*domain.Video{v}},
+		&mockStorage{},
+		&mockCache{},
+	)
+	err := svc.DeleteVideo(context.Background(), uuid.New(), v.ID)
+	if !service.IsOwnershipError(err) {
+		t.Errorf("expected ownershipError, got %v", err)
+	}
+}
+
+func TestDeleteVideo_RepoDeleteError(t *testing.T) {
+	v := newVideo("ERROR")
+	repo := &mockRepo{videos: []*domain.Video{v}, err: nil}
+	svc := service.NewStatusService(repo, &mockStorage{}, &mockCache{})
+
+	// Make Delete fail by injecting error after FindByID succeeds.
+	// mockRepo.Delete returns m.err; set it after construction via a wrapper.
+	repoWithDeleteErr := &mockRepoDeleteErr{inner: repo}
+	svc2 := service.NewStatusService(repoWithDeleteErr, &mockStorage{}, &mockCache{})
+	err := svc2.DeleteVideo(context.Background(), v.UserID, v.ID)
+	if err == nil {
+		t.Fatal("expected delete error")
+	}
+	_ = svc
+}
+
+// mockRepoDeleteErr wraps mockRepo and returns an error only on Delete.
+type mockRepoDeleteErr struct{ inner *mockRepo }
+
+func (m *mockRepoDeleteErr) ListByUser(ctx context.Context, id uuid.UUID) ([]*domain.Video, error) {
+	return m.inner.ListByUser(ctx, id)
+}
+func (m *mockRepoDeleteErr) FindByID(ctx context.Context, id uuid.UUID) (*domain.Video, error) {
+	return m.inner.FindByID(ctx, id)
+}
+func (m *mockRepoDeleteErr) Delete(_ context.Context, _ uuid.UUID) error {
+	return errors.New("delete failed")
 }
 
 // --- tests: StatusCode / IsOwnershipError ---

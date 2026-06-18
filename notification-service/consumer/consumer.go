@@ -13,10 +13,43 @@ import (
 	"github.com/mechmanager/fiapx/notification-service/mailer"
 )
 
-const (
-	emailSubject = "[FIAP X] Erro ao processar seu vídeo"
-	emailBodyFmt = "Olá! Houve um erro ao processar o vídeo \"%s\".\n\nDetalhes: %s"
-)
+const emailSubject = "[FIAP X] Erro ao processar seu vídeo"
+
+const emailBodyTpl = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:Inter,Arial,sans-serif;background:#f4f4f8;margin:0;padding:24px;">
+  <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.08);">
+    <div style="background:#0b0b14;padding:28px 32px;text-align:center;">
+      <span style="color:#fff;font-size:1.5rem;font-weight:800;letter-spacing:-.5px;">FIAP<span style="color:#ed0c6e;">X</span></span>
+      <span style="background:#ed0c6e;color:#fff;font-size:.65rem;font-weight:700;padding:2px 8px;border-radius:20px;letter-spacing:.5px;text-transform:uppercase;margin-left:8px;vertical-align:middle;">Pos Tech</span>
+    </div>
+    <div style="padding:36px 32px;">
+      <h2 style="color:#111827;font-size:1.1rem;font-weight:700;margin:0 0 12px;">Falha no processamento do vídeo</h2>
+      <p style="color:#6b7280;font-size:.92rem;line-height:1.6;margin:0 0 24px;">Olá! Identificamos um problema ao processar o seu vídeo. Veja os detalhes abaixo.</p>
+      <div style="background:#fff5f7;border:1px solid rgba(237,12,110,.2);border-radius:10px;padding:16px 20px;margin-bottom:24px;">
+        <p style="margin:0 0 4px;font-size:.75rem;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;font-weight:600;">Arquivo</p>
+        <p style="margin:0;font-size:1rem;font-weight:700;color:#111827;">%s</p>
+      </div>
+      <p style="color:#6b7280;font-size:.9rem;line-height:1.6;margin:0;">
+        Nosso sistema encontrou um problema técnico durante a extração de frames deste arquivo.
+        Isso pode acontecer se o arquivo estiver corrompido ou em um formato não suportado.
+      </p>
+      <div style="margin:20px 0;padding:16px;background:#f9fafb;border-radius:8px;">
+        <p style="margin:0 0 8px;font-size:.85rem;font-weight:700;color:#374151;">O que fazer:</p>
+        <ul style="margin:0;padding-left:18px;color:#6b7280;font-size:.88rem;line-height:1.8;">
+          <li>Verifique se o arquivo de vídeo não está corrompido</li>
+          <li>Certifique-se de que está em um formato suportado (MP4, AVI, MOV, MKV)</li>
+          <li>Tente enviar o arquivo novamente pela plataforma</li>
+        </ul>
+      </div>
+    </div>
+    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 32px;text-align:center;">
+      <p style="margin:0;font-size:.75rem;color:#9ca3af;">© FIAP X — Pos Tech &nbsp;·&nbsp; Você recebeu este e-mail porque está cadastrado em nossa plataforma.</p>
+    </div>
+  </div>
+</body>
+</html>`
 
 // NotificationMessage representa a mensagem publicada na fila de notificação.
 type NotificationMessage struct {
@@ -28,16 +61,15 @@ type NotificationMessage struct {
 
 // NotificationConsumer consome mensagens da fila de notificação.
 type NotificationConsumer struct {
-	conn       *amqp.Connection
-	channel    *amqp.Channel
-	queue      string
-	maxRetries int
-	userRepo   domain.UserRepository
-	mailer     mailer.Mailer
+	conn     *amqp.Connection
+	channel  *amqp.Channel
+	queue    string
+	userRepo domain.UserRepository
+	mailer   mailer.Mailer
 }
 
 // New cria e configura o consumidor de notificações.
-func New(rabbitURL, queueName string, maxRetries int, userRepo domain.UserRepository, m mailer.Mailer) (*NotificationConsumer, error) {
+func New(rabbitURL, queueName string, _ int, userRepo domain.UserRepository, m mailer.Mailer) (*NotificationConsumer, error) {
 	conn, err := amqp.Dial(rabbitURL)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao conectar no RabbitMQ: %w", err)
@@ -77,12 +109,11 @@ func New(rabbitURL, queueName string, maxRetries int, userRepo domain.UserReposi
 	}
 
 	return &NotificationConsumer{
-		conn:       conn,
-		channel:    ch,
-		queue:      queueName,
-		maxRetries: maxRetries,
-		userRepo:   userRepo,
-		mailer:     m,
+		conn:     conn,
+		channel:  ch,
+		queue:    queueName,
+		userRepo: userRepo,
+		mailer:   m,
 	}, nil
 }
 
@@ -148,7 +179,7 @@ func (c *NotificationConsumer) handle(ctx context.Context, msg amqp.Delivery) {
 		return
 	}
 
-	body := fmt.Sprintf(emailBodyFmt, notification.Filename, notification.Error)
+	body := fmt.Sprintf(emailBodyTpl, notification.Filename)
 	if err := c.mailer.Send(email, emailSubject, body); err != nil {
 		log.Printf("erro ao enviar e-mail: %v", err)
 		c.nackWithRetry(msg)
@@ -162,32 +193,10 @@ func (c *NotificationConsumer) handle(ctx context.Context, msg amqp.Delivery) {
 }
 
 func (c *NotificationConsumer) nackWithRetry(msg amqp.Delivery) {
-	retries := xDeathCount(msg)
-	if retries >= c.maxRetries {
-		log.Printf("mensagem excedeu %d tentativas, enviando para DLQ", c.maxRetries)
-		if err := msg.Nack(false, false); err != nil {
-			log.Printf("[WARN] nack error: %v", err)
-		}
-		return
-	}
-	if err := msg.Nack(false, true); err != nil {
+	// requeue=false envia para DLQ; requeue=true bypassa o dead-letter exchange
+	// e nunca incrementa x-death, causando loop infinito.
+	log.Printf("[WARN] falha transitória na notificação → enviando para DLQ")
+	if err := msg.Nack(false, false); err != nil {
 		log.Printf("[WARN] nack error: %v", err)
 	}
-}
-
-func xDeathCount(msg amqp.Delivery) int {
-	xDeath, ok := msg.Headers["x-death"]
-	if !ok {
-		return 0
-	}
-	deathList, ok := xDeath.([]interface{})
-	if !ok || len(deathList) == 0 {
-		return 0
-	}
-	deathMap, ok := deathList[0].(amqp.Table)
-	if !ok {
-		return 0
-	}
-	count, _ := deathMap["count"].(int64)
-	return int(count)
 }

@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -64,8 +65,9 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 		metrics.VideosProcessed.WithLabelValues("error").Inc()
 		log.Printf("service=worker event=processamento status=erro msg=\"falha ao processar vídeo\" video_id=%s filename=%s duration=%s err=%v",
 			m.VideoID, m.Filename, duration.Round(time.Millisecond), err)
-		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, err.Error())
-		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, err.Error())
+		userMsg := friendlyError(err)
+		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, userMsg)
+		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, userMsg)
 		return false, err
 	}
 
@@ -113,4 +115,22 @@ func (p *Pipeline) process(ctx context.Context, m Message) (int, error) {
 	}
 
 	return result.FrameCount, nil
+}
+
+// friendlyError converte erros técnicos em mensagens legíveis para o usuário.
+func friendlyError(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "ffmpeg") ||
+		strings.Contains(msg, "moov atom") ||
+		strings.Contains(msg, "Invalid data") ||
+		strings.Contains(msg, "nenhum frame"):
+		return "Arquivo corrompido ou formato não suportado"
+	case strings.Contains(msg, "erro ao baixar"):
+		return "Erro ao acessar o arquivo de origem"
+	case strings.Contains(msg, "erro ao enviar zip"):
+		return "Erro ao armazenar os frames processados"
+	default:
+		return "Falha no processamento do vídeo"
+	}
 }
