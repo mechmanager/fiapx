@@ -14,6 +14,7 @@ import (
 
 	"github.com/mechmanager/fiapx/status-service/domain"
 	"github.com/mechmanager/fiapx/status-service/handler"
+	"github.com/mechmanager/fiapx/status-service/service"
 )
 
 func init() {
@@ -158,5 +159,55 @@ func TestDownload_NotReady(t *testing.T) {
 	w := perform(r, "GET", "/videos/"+uuid.New().String()+"/download", map[string]string{"X-User-ID": uuid.New().String()})
 	if w.Code != http.StatusConflict {
 		t.Errorf("expected 409, got %d", w.Code)
+	}
+}
+
+// --- tests: Delete ---
+
+func TestDelete_MissingUserID(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{})
+	w := perform(r, "DELETE", "/videos/"+uuid.New().String(), nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestDelete_InvalidVideoID(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{})
+	w := perform(r, "DELETE", "/videos/not-a-uuid", map[string]string{"X-User-ID": uuid.New().String()})
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestDelete_Success(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{})
+	w := perform(r, "DELETE", "/videos/"+uuid.New().String(), map[string]string{"X-User-ID": uuid.New().String()})
+	if w.Code != http.StatusNoContent {
+		t.Errorf("expected 204, got %d", w.Code)
+	}
+}
+
+func TestDelete_NotFound(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{err: domain.ErrVideoNotFound})
+	w := perform(r, "DELETE", "/videos/"+uuid.New().String(), map[string]string{"X-User-ID": uuid.New().String()})
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestDelete_Forbidden(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{err: service.NewOwnershipError()})
+	w := perform(r, "DELETE", "/videos/"+uuid.New().String(), map[string]string{"X-User-ID": uuid.New().String()})
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestDelete_ServerError(t *testing.T) {
+	r := newRouter(&mockStatusUseCase{err: errors.New("db error")})
+	w := perform(r, "DELETE", "/videos/"+uuid.New().String(), map[string]string{"X-User-ID": uuid.New().String()})
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
 	}
 }

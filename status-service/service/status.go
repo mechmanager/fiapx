@@ -104,3 +104,6 @@ func IsOwnershipError(err error) bool {
 	_, ok := err.(*ownershipError)
 	return ok
 }
+
+// NewOwnershipError cria um erro de propriedade (usado em testes).
+func NewOwnershipError() error { return &ownershipError{} }
