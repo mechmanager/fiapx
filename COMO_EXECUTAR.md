@@ -1,17 +1,44 @@
 # FIAP X — Como executar localmente
 
+> Guia completo para rodar o sistema de processamento de vídeos em ambiente local com Docker Compose.
+
+---
+
 ## Pré-requisitos
 
-- [Docker](https://docs.docker.com/get-docker/) + Docker Compose v2
-- Porta `8080` (gateway), `5432` (postgres), `5672`/`15672` (rabbitmq), `9000`/`9001` (minio), `6379` (redis) livres
+| Ferramenta | Versão mínima |
+|------------|--------------|
+| Docker Desktop | 24+ |
+| Docker Compose | v2 (incluído no Docker Desktop) |
+
+**Portas que precisam estar livres:**
+
+| Porta | Serviço |
+|-------|---------|
+| 8080 | API Gateway (frontend + API) |
+| 5432 | PostgreSQL |
+| 5672 / 15672 | RabbitMQ (AMQP / Management UI) |
+| 9000 / 9001 | MinIO (API / Console) |
+| 6379 | Redis |
+| 9090 | Prometheus |
+| 3000 | Grafana |
 
 ---
 
 ## 1. Configuração do ambiente
 
-O arquivo `.env` já está pronto na raiz do projeto com todas as variáveis configuradas (incluindo SMTP).
+O arquivo `.env` já está presente na raiz com todas as variáveis preenchidas (inclusive SMTP).  
+Edite-o se precisar trocar senhas ou configurar outro servidor de e-mail.
 
-Caso precise ajustar algo (ex.: trocar senha do banco), edite o `.env` antes de subir.
+```bash
+# Variáveis principais — valores padrão já funcionam localmente
+POSTGRES_USER=fiapx
+POSTGRES_PASSWORD=fiapx123
+JWT_SECRET=fiapx-super-secret-jwt-key-minimum-32-chars-ok
+MINIO_ROOT_USER=minioadmin
+MINIO_ROOT_PASSWORD=minioadmin123
+SMTP_HOST=smtp.gmail.com
+```
 
 ---
 
@@ -21,14 +48,19 @@ Caso precise ajustar algo (ex.: trocar senha do banco), edite o `.env` antes de 
 docker compose up --build
 ```
 
-Na primeira execução o Docker vai:
-1. Fazer o build das imagens de cada serviço Go
+Na **primeira execução** o Docker irá:
+1. Fazer o build das 6 imagens Go
 2. Subir PostgreSQL, RabbitMQ, MinIO e Redis
 3. Criar o bucket `videos` no MinIO automaticamente
-4. Executar o `scripts/init.sql` criando as tabelas `users` e `videos`
-5. Subir api-gateway, auth-service, upload-service, status-service, worker e notification-service
+4. Rodar `scripts/init.sql` criando as tabelas `users` e `videos`
+5. Iniciar api-gateway, auth-service, upload-service, status-service, worker e notification-service
 
-Aguarde todos os containers ficarem `healthy` antes de usar (leva ~30–60s na primeira vez).
+Aguarde todos os containers ficarem `healthy` (leva ~30–60 s na primeira vez).
+
+Para subir em background:
+```bash
+docker compose up --build -d
+```
 
 ---
 
@@ -38,117 +70,185 @@ Aguarde todos os containers ficarem `healthy` antes de usar (leva ~30–60s na p
 docker compose ps
 ```
 
-Todos os serviços devem estar com status `running` ou `Up`.
+Todos os serviços devem aparecer com status `Up` ou `healthy`.
 
 ---
 
 ## 4. Acessar o frontend
 
-Abra no navegador:
-
 ```
 http://localhost:8080
 ```
 
-A página de login do FIAP X vai aparecer.
+O frontend React carrega direto no browser com design FIAP PosTech.
+
+**Funcionalidades:**
+- Cadastro e login de usuário
+- Upload de um ou múltiplos vídeos por vez (drag-and-drop ou seleção no finder)
+- Atualização automática do status a cada 4 s enquanto houver vídeos processando
+- Download do ZIP de frames com autenticação JWT embutida
+- Painel de estatísticas: total, concluídos, processando e frames extraídos
 
 ---
 
-## 5. Fluxo de uso
+## 5. Fluxo de uso via API (curl)
 
 ### 5.1 Criar conta
 
 ```bash
 curl -s -X POST http://localhost:8080/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"name":"Teste","email":"teste@fiapx.com","password":"senha123"}' | jq
+  -d '{"name":"Seu Nome","email":"voce@email.com","password":"senha123"}' | jq
 ```
 
 ### 5.2 Fazer login
 
 ```bash
-curl -s -X POST http://localhost:8080/auth/login \
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"teste@fiapx.com","password":"senha123"}' | jq
+  -d '{"email":"voce@email.com","password":"senha123"}' | jq -r '.token')
 ```
-
-Copie o `token` retornado.
 
 ### 5.3 Enviar um vídeo
 
 ```bash
 curl -s -X POST http://localhost:8080/videos \
-  -H "Authorization: Bearer SEU_TOKEN_AQUI" \
+  -H "Authorization: Bearer $TOKEN" \
   -F "video=@/caminho/para/video.mp4" | jq
+# {"id":"<uuid>","status":"PENDING"}
 ```
 
-### 5.4 Consultar status do vídeo
+### 5.4 Consultar status
 
 ```bash
 curl -s http://localhost:8080/videos \
-  -H "Authorization: Bearer SEU_TOKEN_AQUI" | jq
+  -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-O status vai evoluir: `PENDING` → `PROCESSING` → `DONE` (ou `ERROR`).
+O status evolui: `PENDING` → `PROCESSING` → `DONE` (ou `ERROR`).
 
-Quando `DONE`, o campo `zip_url` contém o link para baixar o ZIP com os frames extraídos.
-
----
-
-## 6. UIs de administração
-
-| Serviço    | URL                          | Usuário / Senha          |
-|------------|------------------------------|--------------------------|
-| RabbitMQ   | http://localhost:15672       | `fiapx` / `fiapx123`     |
-| MinIO      | http://localhost:9001        | `minioadmin` / `minioadmin123` |
-
----
-
-## 7. Escalar workers
-
-Para processar mais vídeos em paralelo:
+### 5.5 Baixar o ZIP de frames
 
 ```bash
-docker compose up --scale worker=3
+curl -OJ http://localhost:8080/videos/<uuid>/download \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 5.6 Processar múltiplos vídeos em paralelo
+
+```bash
+for video in samples/sample1.mp4 samples/sample2.mp4 samples/sample3.mp4; do
+  curl -s -X POST http://localhost:8080/videos \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "video=@$video" &
+done
+wait
+curl -s http://localhost:8080/videos -H "Authorization: Bearer $TOKEN" | jq '.[].status'
 ```
 
 ---
 
-## 8. Ver logs de um serviço específico
+## 6. Observabilidade
+
+### Prometheus
+```
+http://localhost:9090
+```
+Coleta métricas de todos os serviços a cada 15 s.
+
+### Grafana
+```
+http://localhost:3000
+```
+Login: qualquer usuário (acesso anônimo habilitado) ou `admin` / `admin`.
+
+O dashboard **"FIAP X — Monitoramento"** já aparece automaticamente na pasta *FIAP X* com 10 painéis:
+
+| Painel | O que mostra |
+|--------|-------------|
+| Requests/s — API Gateway | Taxa de requisições por rota |
+| Taxa de Erros 5xx | Percentual de erros no gateway |
+| Latência p50/p95/p99 | Histograma de tempo de resposta |
+| Fila RabbitMQ | Mensagens aguardando processamento |
+| Vídeos Concluídos / com Erro | Contadores do worker |
+| Throughput do Worker | Vídeos processados por minuto |
+| Duração de Processamento | p50/p95 do tempo de extração de frames |
+| Goroutines por Serviço | Saúde do runtime Go em cada serviço |
+
+---
+
+## 7. UIs de administração
+
+| Serviço | URL | Credenciais |
+|---------|-----|-------------|
+| RabbitMQ Management | http://localhost:15672 | `fiapx` / `fiapx123` |
+| MinIO Console | http://localhost:9001 | `minioadmin` / `minioadmin123` |
+| Grafana | http://localhost:3000 | anônimo ou `admin` / `admin` |
+| Prometheus | http://localhost:9090 | — |
+
+---
+
+## 8. Escalar workers
+
+Para processar mais vídeos em paralelo (ex.: 3 workers simultâneos):
+
+```bash
+docker compose up --scale worker=3 -d
+```
+
+Cada worker consome da mesma fila `video.upload` com prefetch 5.
+
+---
+
+## 9. Ver logs de um serviço
 
 ```bash
 docker compose logs -f worker
-docker compose logs -f notification-service
 docker compose logs -f api-gateway
+docker compose logs -f notification-service
 ```
 
 ---
 
-## 9. Parar tudo
+## 10. Parar tudo
 
 ```bash
-# Para os containers mas mantém os dados
+# Mantém os dados (banco, MinIO, Grafana)
 docker compose down
 
-# Para e apaga volumes (banco, minio, grafana) — reset completo
+# Reset completo — apaga todos os volumes
 docker compose down -v
 ```
 
 ---
 
-## Portas resumidas
+## Vídeos de exemplo
 
-| Serviço             | Porta |
-|---------------------|-------|
-| API Gateway         | 8080  |
-| Auth Service        | 8081  |
-| Upload Service      | 8082  |
-| Status Service      | 8083  |
-| PostgreSQL          | 5432  |
-| RabbitMQ AMQP       | 5672  |
+A pasta `samples/` contém 4 vídeos prontos para teste (clips do Big Buck Bunny — CC BY 3.0):
+
+| Arquivo | Cena |
+|---------|------|
+| `sample1.mp4` | Floresta — cena tranquila |
+| `sample2.mp4` | Perseguição com a águia |
+| `sample3.mp4` | Esquilo correndo |
+| `sample4.mp4` | Borboletas — cena final |
+
+---
+
+## Referência de portas
+
+| Serviço | Porta |
+|---------|-------|
+| API Gateway + Frontend | 8080 |
+| Auth Service | 8081 (interno) |
+| Upload Service | 8082 (interno) |
+| Status Service | 8083 (interno) |
+| Worker Metrics | 9100 (interno) |
+| PostgreSQL | 5432 |
+| RabbitMQ AMQP | 5672 |
 | RabbitMQ Management | 15672 |
-| MinIO API           | 9000  |
-| MinIO Console       | 9001  |
-| Redis               | 6379  |
-| Prometheus          | 9090  |
-| Grafana             | 3000  |
+| MinIO API | 9000 |
+| MinIO Console | 9001 |
+| Redis | 6379 |
+| Prometheus | 9090 |
+| Grafana | 3000 |

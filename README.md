@@ -1,195 +1,171 @@
 # FIAP X — Plataforma de Processamento de Vídeos
 
-Sistema de processamento de vídeos em arquitetura de microsserviços, construído como
-reescrita escalável de um monolito Go. Recebe vídeos via API REST, extrai frames com
-ffmpeg e disponibiliza um `.zip` para download.
+Sistema de processamento de vídeos em arquitetura de microsserviços Go.  
+Recebe vídeos via API REST, extrai frames com ffmpeg e disponibiliza um `.zip` para download.
+
+> **Como executar localmente → [COMO_EXECUTAR.md](COMO_EXECUTAR.md)**
+
+---
 
 ## Arquitetura
 
 Veja [ARCHITECTURE.md](ARCHITECTURE.md) para diagramas de componentes e sequência.
 
-**Serviços:**
-- **api-gateway** — autenticação JWT, upload, listagem e download (Gin)
-- **worker** — consome fila RabbitMQ, processa vídeo com ffmpeg, armazena zip no MinIO
-- **PostgreSQL** — usuários e metadados de vídeo
-- **RabbitMQ** — fila durável `video.process` (prefetch=5, ack manual)
-- **MinIO** — armazenamento S3-compatível de vídeos e zips
+### Microsserviços
 
-## Pré-requisitos
+| Serviço | Responsabilidade | Porta |
+|---------|-----------------|-------|
+| **api-gateway** | Proxy reverso, JWT, rate limit, serve o frontend React | 8080 |
+| **auth-service** | Cadastro, login, geração de JWT | 8081 |
+| **upload-service** | Recebe o vídeo, salva no MinIO, publica na fila | 8082 |
+| **status-service** | Listagem de vídeos e download do ZIP de frames | 8083 |
+| **worker** | Consome a fila, extrai frames com ffmpeg, compacta em ZIP | — |
+| **notification-service** | Consome notificações de erro e envia e-mail via SMTP | — |
 
-- Docker e Docker Compose v2
-- `ffmpeg` instalado nos contêineres (incluído no Dockerfile do worker)
-- (Opcional) `go 1.25+` para rodar testes locais
+### Infraestrutura
 
-## Configuração
+| Componente | Função |
+|------------|--------|
+| **PostgreSQL** | Persistência de usuários e metadados de vídeos |
+| **RabbitMQ** | Fila durável `video.upload` com DLQ, prefetch 5, ack manual |
+| **MinIO** | Object storage S3-compatível para vídeos e ZIPs |
+| **Redis** | Cache de metadados no status-service |
+| **Prometheus** | Coleta de métricas de todos os serviços |
+| **Grafana** | Dashboard de monitoramento (provisionado automaticamente) |
 
-```bash
-# 1. Copiar e editar variáveis de ambiente
-cp .env.example .env
-# Edite .env e troque todos os valores TROQUE_*
+---
 
-# 2. Subir todos os serviços
-docker compose up --build
+## Fluxo de processamento
+
+```
+Usuário → api-gateway → upload-service → MinIO (vídeo)
+                                       → RabbitMQ (mensagem)
+                                               ↓
+                                           worker
+                                       → ffmpeg (frames)
+                                       → ZIP → MinIO
+                                       → PostgreSQL (status DONE)
+                                       → notification-service (em caso de erro)
 ```
 
-A aplicação estará disponível em `http://localhost:8080`.
-
-## Interface Web
-
-Acesse `http://localhost:8080` para usar o frontend HTML integrado:
-- Cadastro e login de usuário
-- Upload de vídeo (`.mp4`, `.avi`, `.mov`, `.mkv`, `.webm`)
-- Listagem de status em tempo real
-- Download do zip de frames
-
-## API — exemplos com curl
-
-### Saúde
-
-```bash
-curl http://localhost:8080/health
-# {"status":"ok"}
-```
-
-### Cadastro
-
-```bash
-curl -s -X POST http://localhost:8080/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"usuario@exemplo.com","password":"senha123"}' | jq
-```
-
-### Login
-
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"usuario@exemplo.com","password":"senha123"}' \
-  | jq -r '.token')
-echo "Token: $TOKEN"
-```
-
-### Upload de vídeo
-
-```bash
-curl -s -X POST http://localhost:8080/videos \
-  -H "Authorization: Bearer $TOKEN" \
-  -F "file=@/caminho/para/video.mp4" | jq
-# {"id":"<uuid>","status":"PENDING"}
-```
-
-### Listagem de vídeos
-
-```bash
-curl -s http://localhost:8080/videos \
-  -H "Authorization: Bearer $TOKEN" | jq
-# [{"id":"...","filename":"video.mp4","status":"DONE","frame_count":42,...}]
-```
-
-### Download do zip de frames
-
-```bash
-curl -OJ http://localhost:8080/videos/<uuid>/download \
-  -H "Authorization: Bearer $TOKEN"
-# Salva frames_<uuid>.zip no diretório atual
-```
-
-### Teste de processamento paralelo
-
-```bash
-# Enviar 3 vídeos simultaneamente
-for i in 1 2 3; do
-  curl -s -X POST http://localhost:8080/videos \
-    -H "Authorization: Bearer $TOKEN" \
-    -F "file=@video.mp4" &
-done
-wait
-
-# Acompanhar status
-curl -s http://localhost:8080/videos \
-  -H "Authorization: Bearer $TOKEN" | jq '.[].status'
-```
-
-## Testes
-
-```bash
-# Rodar testes com gate de cobertura ≥ 80% (requer Go instalado localmente)
-bash scripts/coverage.sh
-
-# Ou por módulo
-cd api-gateway && go test ./... -cover
-cd worker      && go test ./... -cover
-```
-
-## Kubernetes
-
-```bash
-# 1. Criar secrets a partir do template
-cp k8s/secrets.yaml.example k8s/secrets.yaml
-# Edite k8s/secrets.yaml com valores base64 reais:
-#   echo -n "minhasenha" | base64
-
-# 2. Aplicar todos os manifestos
-kubectl apply -k k8s/
-
-# 3. Acompanhar pods
-kubectl get pods -n fiapx -w
-```
-
-## Infraestrutura AWS (Terraform)
-
-```bash
-cd terraform
-
-# Inicializar providers
-terraform init
-
-# Planejar (revise antes de aplicar)
-terraform plan
-
-# Criar cluster EKS (~15 min)
-terraform apply
-
-# Configurar kubectl
-$(terraform output -raw kubeconfig_command)
-
-# Destruir quando não precisar mais
-terraform destroy
-```
-
-> **Custo estimado:** t3.medium × 3 nós ≈ US$ 0,12/h. Lembre de destruir o cluster
-> após a apresentação para evitar cobranças.
-
-## CI/CD
-
-O pipeline `.github/workflows/ci.yml` executa em todo push e PR:
-
-| Job | O que faz |
-|-----|-----------|
-| `lint` | `gofmt` + `go vet` nos dois módulos |
-| `test` | `go test` com cobertura, gate ≥ 80%, artefatos de coverage |
-| `sonar` | SonarCloud scan (requer secret `SONAR_TOKEN` no repositório) |
-| `docker` | Build e push das imagens para `ghcr.io` (apenas na branch `main`) |
-
-### Secrets necessários no GitHub
-
-| Secret | Descrição |
-|--------|-----------|
-| `SONAR_TOKEN` | Token de autenticação do SonarCloud |
-| `GITHUB_TOKEN` | Automático — usado para push no GHCR |
-
-## Variáveis de ambiente
-
-Veja `.env.example` para a lista completa. Nunca comite o arquivo `.env`.
-
-## Estado dos vídeos
-
+**Estados do vídeo:**
 ```
 PENDING → PROCESSING → DONE
                     ↘ ERROR
 ```
 
-- `PENDING`: upload recebido, na fila aguardando worker
-- `PROCESSING`: worker iniciou o processamento
-- `DONE`: zip gerado e disponível para download
-- `ERROR`: falha no processamento (detalhes no log do worker)
+---
+
+## API REST
+
+Todos os endpoints passam pelo api-gateway em `http://localhost:8080`.
+
+### Autenticação
+
+```bash
+# Cadastro
+curl -s -X POST http://localhost:8080/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Seu Nome","email":"voce@email.com","password":"senha123"}'
+
+# Login — retorna JWT
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"voce@email.com","password":"senha123"}' | jq -r '.token')
+```
+
+### Vídeos
+
+```bash
+# Upload
+curl -s -X POST http://localhost:8080/videos \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "video=@video.mp4"
+
+# Listar com status
+curl -s http://localhost:8080/videos \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Baixar ZIP de frames
+curl -OJ http://localhost:8080/videos/<uuid>/download \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Qualidade de Software
+
+| Aspecto | Ferramenta | Gate |
+|---------|-----------|------|
+| Cobertura de testes | `go test -coverprofile` | ≥ 80% por serviço |
+| Análise estática | SonarCloud | Reliability A, Duplication ≤ 3% |
+| Formatação | `gofmt` | Zero diff |
+| Lint | `go vet` | Zero warnings |
+
+```bash
+# Rodar testes localmente (requer Go 1.25+)
+cd api-gateway && go test ./... -cover
+cd worker      && go test ./config/... ./pipeline/... ./processor/... -cover
+```
+
+---
+
+## CI/CD
+
+Pipeline GitHub Actions em `.github/workflows/` — um workflow por serviço:
+
+| Job | O que faz |
+|-----|-----------|
+| `lint-and-test` | `gofmt` + `go vet` + `go test` com gate de cobertura |
+| `docker` | Build e push da imagem para `ghcr.io` (apenas na `main`) |
+| `sonar` | Análise SonarCloud (requer secret `SONAR_TOKEN`) |
+
+**Secrets necessários no repositório:**
+
+| Secret | Descrição |
+|--------|-----------|
+| `SONAR_TOKEN` | Token de autenticação do SonarCloud |
+| `GITHUB_TOKEN` | Automático — para push no GHCR |
+
+---
+
+## Observabilidade
+
+```
+http://localhost:9090   → Prometheus
+http://localhost:3000   → Grafana (dashboard auto-provisionado)
+```
+
+Métricas expostas:
+- `gateway_http_requests_total` — requisições por rota/método/status
+- `gateway_http_request_duration_seconds` — histograma de latência
+- `worker_videos_processed_total` — contagem por resultado (done/error)
+- `worker_processing_duration_seconds` — histograma de duração do processamento
+- Métricas Go runtime (goroutines, GC, memória) em todos os serviços
+- Métricas RabbitMQ (fila, consumers)
+
+---
+
+## Escalabilidade horizontal
+
+```bash
+# Escalar workers para processar vídeos em paralelo
+docker compose up --scale worker=3 -d
+```
+
+Cada instância do worker consome independentemente da mesma fila RabbitMQ.  
+O sistema não perde requisições em picos — mensagens ficam enfileiradas até um worker estar disponível.
+
+---
+
+## Variáveis de ambiente
+
+Veja o arquivo `.env` na raiz para a configuração completa.  
+**Nunca versione o arquivo `.env`.**
+
+---
+
+## Vídeos de exemplo
+
+A pasta `samples/` contém clips do **Big Buck Bunny** (Blender Foundation — CC BY 3.0)  
+prontos para testar o pipeline de processamento.
