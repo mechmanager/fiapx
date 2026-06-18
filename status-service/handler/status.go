@@ -38,9 +38,11 @@ func (h *StatusHandler) List(c *gin.Context) {
 		return
 	}
 
+	log.Printf("service=status-service event=consulta msg=\"consultando status dos vídeos\" user_id=%s", userID)
+
 	videos, err := h.svc.ListByUser(c.Request.Context(), userID)
 	if err != nil {
-		log.Printf("service=status-service event=list status=error user_id=%s err=%v", userID, err)
+		log.Printf("service=status-service event=consulta status=erro msg=\"falha ao consultar vídeos\" user_id=%s err=%v", userID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "erro ao listar vídeos"})
 		return
 	}
@@ -48,7 +50,7 @@ func (h *StatusHandler) List(c *gin.Context) {
 	if videos == nil {
 		videos = []*domain.Video{}
 	}
-	log.Printf("service=status-service event=list status=ok user_id=%s count=%d", userID, len(videos))
+	log.Printf("service=status-service event=consulta status=ok msg=\"status dos vídeos retornado\" user_id=%s total=%d", userID, len(videos))
 
 	type videoResponse struct {
 		ID               string `json:"id"`
@@ -87,31 +89,33 @@ func (h *StatusHandler) Download(c *gin.Context) {
 		return
 	}
 
+	log.Printf("service=status-service event=download msg=\"iniciando download do ZIP de frames\" user_id=%s video_id=%s", userID, videoID)
+
 	stream, err := h.svc.GetDownloadStream(c.Request.Context(), userID, videoID)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrVideoNotFound):
-			log.Printf("service=status-service event=download status=not_found user_id=%s video_id=%s", userID, videoID)
+			log.Printf("service=status-service event=download status=nao_encontrado msg=\"vídeo não encontrado\" user_id=%s video_id=%s", userID, videoID)
 			c.JSON(http.StatusNotFound, gin.H{"error": "vídeo não encontrado"})
 		case errors.Is(err, domain.ErrVideoNotReady):
-			log.Printf("service=status-service event=download status=not_ready user_id=%s video_id=%s", userID, videoID)
+			log.Printf("service=status-service event=download status=nao_pronto msg=\"vídeo ainda em processamento\" user_id=%s video_id=%s", userID, videoID)
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		case service.IsOwnershipError(err):
-			log.Printf("service=status-service event=download status=forbidden user_id=%s video_id=%s", userID, videoID)
+			log.Printf("service=status-service event=download status=negado msg=\"acesso negado ao vídeo\" user_id=%s video_id=%s", userID, videoID)
 			c.JSON(http.StatusForbidden, gin.H{"error": "acesso negado"})
 		default:
-			log.Printf("service=status-service event=download status=error user_id=%s video_id=%s err=%v", userID, videoID, err)
+			log.Printf("service=status-service event=download status=erro msg=\"falha ao baixar arquivo\" user_id=%s video_id=%s err=%v", userID, videoID, err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "erro ao baixar arquivo"})
 		}
 		return
 	}
 	defer stream.Close()
 
-	log.Printf("service=status-service event=download status=ok user_id=%s video_id=%s", userID, videoID)
+	log.Printf("service=status-service event=download status=ok msg=\"download do ZIP de frames iniciado\" user_id=%s video_id=%s", userID, videoID)
 	c.Header("Content-Disposition", "attachment; filename=frames_"+videoID.String()+".zip")
 	c.Header("Content-Type", "application/zip")
 	if _, err := io.Copy(c.Writer, stream); err != nil {
-		log.Printf("service=status-service event=download status=stream_error video_id=%s err=%v", videoID, err)
+		log.Printf("service=status-service event=download status=erro_stream msg=\"falha ao transmitir arquivo\" video_id=%s err=%v", videoID, err)
 	}
 }
 

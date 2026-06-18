@@ -35,6 +35,9 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
+		if p.Path == "/health" || p.Path == "/metrics" {
+			return ""
+		}
 		return fmt.Sprintf("service=auth-service method=%s path=%s status=%d duration=%s ip=%s\n",
 			p.Method, p.Path, p.StatusCode, p.Latency.Round(time.Millisecond), p.ClientIP)
 	}))

@@ -54,7 +54,7 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 		return false, nil
 	}
 
-	log.Printf("service=worker event=processing video_id=%s filename=%s", m.VideoID, m.Filename)
+	log.Printf("service=worker event=processamento msg=\"mensagem recebida da fila - iniciando processamento\" video_id=%s filename=%s", m.VideoID, m.Filename)
 
 	start := time.Now()
 	frames, err := p.process(ctx, m)
@@ -62,7 +62,7 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 	if err != nil {
 		metrics.ProcessingDuration.Observe(duration.Seconds())
 		metrics.VideosProcessed.WithLabelValues("error").Inc()
-		log.Printf("service=worker event=done status=error video_id=%s filename=%s duration=%s err=%v",
+		log.Printf("service=worker event=processamento status=erro msg=\"falha ao processar vídeo\" video_id=%s filename=%s duration=%s err=%v",
 			m.VideoID, m.Filename, duration.Round(time.Millisecond), err)
 		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, err.Error())
 		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, err.Error())
@@ -71,7 +71,7 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 
 	metrics.ProcessingDuration.Observe(duration.Seconds())
 	metrics.VideosProcessed.WithLabelValues("done").Inc()
-	log.Printf("service=worker event=done status=ok video_id=%s filename=%s frames=%d duration=%s",
+	log.Printf("service=worker event=processamento status=ok msg=\"vídeo processado com sucesso - frames extraídos\" video_id=%s filename=%s frames=%d duration=%s",
 		m.VideoID, m.Filename, frames, duration.Round(time.Millisecond))
 	return true, nil
 }
