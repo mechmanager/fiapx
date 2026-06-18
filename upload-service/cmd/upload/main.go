@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/mechmanager/fiapx/upload-service/config"
 	"github.com/mechmanager/fiapx/upload-service/handler"
@@ -52,6 +53,7 @@ func main() {
 	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.Health)
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.POST("/videos", uploadHandler.Upload)
 
 	srv := &http.Server{

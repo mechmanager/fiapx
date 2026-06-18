@@ -8,10 +8,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/mechmanager/fiapx/worker/domain"
+	"github.com/mechmanager/fiapx/worker/metrics"
 	"github.com/mechmanager/fiapx/worker/processor"
 )
 
@@ -54,13 +56,18 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 
 	log.Printf("processando video_id=%s filename=%s", m.VideoID, m.Filename)
 
+	start := time.Now()
 	if err := p.process(ctx, m); err != nil {
+		metrics.ProcessingDuration.Observe(time.Since(start).Seconds())
+		metrics.VideosProcessed.WithLabelValues("error").Inc()
 		log.Printf("[ERRO] video_id=%s: %v", m.VideoID, err)
 		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, err.Error())
 		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, err.Error())
 		return false, err
 	}
 
+	metrics.ProcessingDuration.Observe(time.Since(start).Seconds())
+	metrics.VideosProcessed.WithLabelValues("done").Inc()
 	return true, nil
 }
 

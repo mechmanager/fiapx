@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/mechmanager/fiapx/auth-service/config"
 	"github.com/mechmanager/fiapx/auth-service/handler"
@@ -34,6 +35,7 @@ func main() {
 	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.Health)
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	r.POST("/auth/register", authHandler.Register)
 	r.POST("/auth/login", authHandler.Login)
 

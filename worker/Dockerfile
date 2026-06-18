@@ -11,6 +11,7 @@ COPY cmd/ ./cmd/
 COPY config/ ./config/
 COPY consumer/ ./consumer/
 COPY domain/ ./domain/
+COPY metrics/ ./metrics/
 COPY notification/ ./notification/
 COPY pipeline/ ./pipeline/
 COPY processor/ ./processor/
