@@ -34,6 +34,7 @@ func main() {
 	jwtChecker := middleware.NewJWTChecker(cfg.JWTSecret)
 	rateLimiter := middleware.NewIPRateLimiter(cfg.RateLimitRPS)
 	metricsMW := middleware.NewMetrics()
+	loggerMW := middleware.NewLogger()
 
 	mux := http.NewServeMux()
 
@@ -70,7 +71,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:         ":" + cfg.GatewayPort,
-		Handler:      rateLimiter.Middleware(metricsMW.Middleware(mux)),
+		Handler:      rateLimiter.Middleware(metricsMW.Middleware(loggerMW.Middleware(mux))),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 60 * time.Second,
 		IdleTimeout:  120 * time.Second,

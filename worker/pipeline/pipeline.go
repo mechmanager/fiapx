@@ -54,37 +54,42 @@ func (p *Pipeline) HandleMessage(ctx context.Context, body []byte) (ack bool, er
 		return false, nil
 	}
 
-	log.Printf("processando video_id=%s filename=%s", m.VideoID, m.Filename)
+	log.Printf("service=worker event=processing video_id=%s filename=%s", m.VideoID, m.Filename)
 
 	start := time.Now()
-	if err := p.process(ctx, m); err != nil {
-		metrics.ProcessingDuration.Observe(time.Since(start).Seconds())
+	frames, err := p.process(ctx, m)
+	duration := time.Since(start)
+	if err != nil {
+		metrics.ProcessingDuration.Observe(duration.Seconds())
 		metrics.VideosProcessed.WithLabelValues("error").Inc()
-		log.Printf("[ERRO] video_id=%s: %v", m.VideoID, err)
+		log.Printf("service=worker event=done status=error video_id=%s filename=%s duration=%s err=%v",
+			m.VideoID, m.Filename, duration.Round(time.Millisecond), err)
 		p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusError, err.Error())
 		p.notifier.NotifyError(ctx, m.VideoID, m.UserID, m.Filename, err.Error())
 		return false, err
 	}
 
-	metrics.ProcessingDuration.Observe(time.Since(start).Seconds())
+	metrics.ProcessingDuration.Observe(duration.Seconds())
 	metrics.VideosProcessed.WithLabelValues("done").Inc()
+	log.Printf("service=worker event=done status=ok video_id=%s filename=%s frames=%d duration=%s",
+		m.VideoID, m.Filename, frames, duration.Round(time.Millisecond))
 	return true, nil
 }
 
-func (p *Pipeline) process(ctx context.Context, m Message) error {
+func (p *Pipeline) process(ctx context.Context, m Message) (int, error) {
 	if err := p.videos.UpdateStatus(ctx, m.VideoID, domain.StatusProcessing, ""); err != nil {
-		return fmt.Errorf("erro ao atualizar status para PROCESSING: %w", err)
+		return 0, fmt.Errorf("erro ao atualizar status para PROCESSING: %w", err)
 	}
 
 	workDir, err := os.MkdirTemp("", "fiapx-"+m.VideoID.String())
 	if err != nil {
-		return fmt.Errorf("erro ao criar diretório temporário: %w", err)
+		return 0, fmt.Errorf("erro ao criar diretório temporário: %w", err)
 	}
 	defer os.RemoveAll(workDir)
 
 	videoStream, err := p.storage.Download(ctx, m.S3Key)
 	if err != nil {
-		return fmt.Errorf("erro ao baixar vídeo: %w", err)
+		return 0, fmt.Errorf("erro ao baixar vídeo: %w", err)
 	}
 	defer videoStream.Close()
 
@@ -95,17 +100,17 @@ func (p *Pipeline) process(ctx context.Context, m Message) error {
 
 	result, err := p.proc.Process(ctx, videoStream, filename, workDir)
 	if err != nil {
-		return fmt.Errorf("erro no processamento: %w", err)
+		return 0, fmt.Errorf("erro no processamento: %w", err)
 	}
 
 	zipKey := fmt.Sprintf("zips/%s/frames.zip", m.VideoID)
 	if err := p.storage.UploadFile(ctx, zipKey, result.ZipPath); err != nil {
-		return fmt.Errorf("erro ao enviar zip: %w", err)
+		return 0, fmt.Errorf("erro ao enviar zip: %w", err)
 	}
 
 	if err := p.videos.UpdateDone(ctx, m.VideoID, zipKey, result.FrameCount); err != nil {
-		return fmt.Errorf("erro ao atualizar status para DONE: %w", err)
+		return 0, fmt.Errorf("erro ao atualizar status para DONE: %w", err)
 	}
 
-	return nil
+	return result.FrameCount, nil
 }

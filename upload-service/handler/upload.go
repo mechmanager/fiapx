@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -52,13 +53,17 @@ func (h *UploadHandler) Upload(c *gin.Context) {
 	video, err := h.upload.Upload(c.Request.Context(), userID, header.Filename, file, header.Size)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidVideoFormat) {
+			log.Printf("service=upload-service event=upload status=invalid user_id=%s filename=%s", userID, header.Filename)
 			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("service=upload-service event=upload status=error user_id=%s filename=%s err=%v", userID, header.Filename, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "upload failed"})
 		return
 	}
 
+	log.Printf("service=upload-service event=upload status=ok user_id=%s filename=%s size=%d video_id=%s",
+		userID, header.Filename, header.Size, video.ID)
 	c.JSON(http.StatusAccepted, gin.H{
 		"id":     video.ID,
 		"status": video.Status,

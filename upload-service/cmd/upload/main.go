@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -51,6 +52,10 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(gin.LoggerWithFormatter(func(p gin.LogFormatterParams) string {
+		return fmt.Sprintf("service=upload-service method=%s path=%s status=%d duration=%s ip=%s\n",
+			p.Method, p.Path, p.StatusCode, p.Latency.Round(time.Millisecond), p.ClientIP)
+	}))
 
 	r.GET("/health", handler.Health)
 	r.GET("/metrics", gin.WrapH(promhttp.Handler()))

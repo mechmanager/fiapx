@@ -4,6 +4,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -49,13 +50,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	user, err := h.auth.Register(c.Request.Context(), req.Name, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrEmailAlreadyExists) {
+			log.Printf("service=auth-service event=register status=conflict email=%s", req.Email)
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("service=auth-service event=register status=error email=%s err=%v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to register user"})
 		return
 	}
 
+	log.Printf("service=auth-service event=register status=ok user_id=%s email=%s", user.ID, user.Email)
 	c.JSON(http.StatusCreated, gin.H{
 		"id":    user.ID,
 		"name":  user.Name,
@@ -74,12 +78,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := h.auth.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidCredentials) {
+			log.Printf("service=auth-service event=login status=unauthorized email=%s", req.Email)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
+		log.Printf("service=auth-service event=login status=error email=%s err=%v", req.Email, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to login"})
 		return
 	}
 
+	log.Printf("service=auth-service event=login status=ok email=%s", req.Email)
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
