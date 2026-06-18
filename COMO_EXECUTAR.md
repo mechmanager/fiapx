@@ -160,6 +160,21 @@ Coleta métricas de todos os serviços a cada 15 s.
 ```
 http://localhost:3000
 ```
+
+### Kibana (logs)
+```
+http://localhost:5601
+```
+
+Acesso anônimo — nenhum login necessário.
+
+Na primeira vez, crie o **index pattern** para visualizar os logs:
+1. Acesse **Management → Stack Management → Index Patterns**
+2. Crie um index pattern com o valor `fiapx-logs-*`
+3. Selecione `@timestamp` como campo de tempo
+4. Acesse **Discover** para explorar os logs em tempo real
+
+Você pode filtrar por serviço usando o campo `service` (ex.: `service: worker` mostra só os logs do worker).
 Login: qualquer usuário (acesso anônimo habilitado) ou `admin` / `admin`.
 
 O dashboard **"FIAP X — Monitoramento"** já aparece automaticamente na pasta *FIAP X* com 10 painéis:
@@ -185,6 +200,7 @@ O dashboard **"FIAP X — Monitoramento"** já aparece automaticamente na pasta 
 | MinIO Console | http://localhost:9001 | `minioadmin` / `minioadmin123` |
 | Grafana | http://localhost:3000 | anônimo ou `admin` / `admin` |
 | Prometheus | http://localhost:9090 | — |
+| Kibana (logs) | http://localhost:5601 | — |
 
 ---
 
@@ -252,3 +268,5 @@ A pasta `samples/` contém 4 vídeos prontos para teste (clips do Big Buck Bunny
 | Redis | 6379 |
 | Prometheus | 9090 |
 | Grafana | 3000 |
+| Kibana | 5601 |
+| Elasticsearch | 9200 (interno) |

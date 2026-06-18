@@ -21,3 +21,7 @@ resources:
   - worker.yaml
   - prometheus.yaml
   - grafana.yaml
+  - elasticsearch.yaml
+  - logstash.yaml
+  - kibana.yaml
+  - filebeat.yaml

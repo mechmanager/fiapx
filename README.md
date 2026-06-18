@@ -32,6 +32,10 @@ Veja [ARCHITECTURE.md](ARCHITECTURE.md) para diagramas de componentes e sequênc
 | **Redis** | Cache de metadados no status-service |
 | **Prometheus** | Coleta de métricas de todos os serviços |
 | **Grafana** | Dashboard de monitoramento (provisionado automaticamente) |
+| **Elasticsearch** | Armazenamento de logs estruturados |
+| **Logstash** | Pipeline de processamento de logs |
+| **Kibana** | Exploração e busca de logs em tempo real |
+| **Filebeat** | Coleta de logs dos containers e envia ao Logstash |
 
 ---
 
