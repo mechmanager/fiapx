@@ -36,6 +36,8 @@ func (m *mockStatusUseCase) GetDownloadStream(_ context.Context, _, _ uuid.UUID)
 	return m.stream, m.err
 }
 
+func (m *mockStatusUseCase) DeleteVideo(_ context.Context, _, _ uuid.UUID) error { return m.err }
+
 // --- helpers ---
 
 func newRouter(svc handler.StatusUseCase) *gin.Engine {
@@ -43,6 +45,7 @@ func newRouter(svc handler.StatusUseCase) *gin.Engine {
 	h := handler.NewStatusHandler(svc)
 	r.GET("/videos", h.List)
 	r.GET("/videos/:id/download", h.Download)
+	r.DELETE("/videos/:id", h.Delete)
 	r.GET("/health", handler.Health)
 	return r
 }

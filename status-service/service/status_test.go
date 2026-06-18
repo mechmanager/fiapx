@@ -37,6 +37,8 @@ func (m *mockRepo) FindByID(_ context.Context, id uuid.UUID) (*domain.Video, err
 	return nil, domain.ErrVideoNotFound
 }
 
+func (m *mockRepo) Delete(_ context.Context, _ uuid.UUID) error { return m.err }
+
 type mockStorage struct {
 	stream io.ReadCloser
 	err    error
@@ -45,6 +47,8 @@ type mockStorage struct {
 func (m *mockStorage) Download(_ context.Context, _ string) (io.ReadCloser, error) {
 	return m.stream, m.err
 }
+
+func (m *mockStorage) Delete(_ context.Context, _ ...string) error { return m.err }
 
 type mockCache struct {
 	data map[string]string
