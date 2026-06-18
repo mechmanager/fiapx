@@ -86,9 +86,9 @@
       tabindex="0"
       onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
     >
-      <p>Clique para selecionar um vídeo</p>
+      <p>Clique para selecionar um ou mais vídeos</p>
       <p style="font-size:.8rem;color:#666;margin-top:4px;">MP4, AVI, MOV, MKV, WMV, FLV, WEBM</p>
-      <input type="file" id="file-input" accept="video/*" style="display:none" onchange="doUpload(this)" />
+      <input type="file" id="file-input" accept="video/*" multiple style="display:none" onchange="doUpload(this)" />
     </label>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
       <strong style="font-size:.9rem;">Histórico</strong>
@@ -148,16 +148,34 @@
   }
 
   async function doUpload(input) {
-    const file = input.files[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('video', file);
-    const r = await fetch('/videos', { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { setMsg('upload-msg', body.error || 'Erro no upload', false); return; }
-    setMsg('upload-msg', 'Vídeo enviado! ID: ' + body.id, true);
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    let sent = 0;
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append('video', file);
+      const r = await fetch('/videos', { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) { setMsg('upload-msg', body.error || 'Erro no upload de ' + file.name, false); input.value=''; return; }
+      sent++;
+    }
+    setMsg('upload-msg', sent > 1 ? sent + ' vídeos enviados!' : 'Vídeo enviado!', true);
     input.value = '';
     setTimeout(loadVideos, 800);
+  }
+
+  async function downloadZip(id) {
+    const r = await fetch('/videos/' + id + '/download', { headers: { Authorization: 'Bearer ' + token } });
+    if (!r.ok) { alert('Erro ao baixar o arquivo'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'frames-' + id + '.zip';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   async function loadVideos() {
@@ -176,7 +194,7 @@
       const badge = badgeClass[v.status] || '';
       let action;
       if (v.status === 'DONE') {
-        action = `<a href="/videos/${v.id}/download" style="color:#3a86ff;font-size:.85rem;">Baixar ZIP</a>`;
+        action = `<button onclick="downloadZip('${v.id}')" style="background:none;border:none;color:#3a86ff;font-size:.85rem;cursor:pointer;padding:0;">Baixar ZIP</button>`;
       } else {
         action = `<span style="color:#444;font-size:.85rem;">${v.status === 'ERROR' ? (v.error_message || 'Erro') : '—'}</span>`;
       }
