@@ -109,16 +109,11 @@ func (c *Consumer) handle(ctx context.Context, msg amqp.Delivery) {
 		return
 	}
 
-	retries := xDeathCount(msg)
-	if retries >= c.cfg.MaxRetries {
-		log.Printf("[WARN] mensagem excedeu %d tentativas → DLQ", c.cfg.MaxRetries)
-		if err := msg.Nack(false, false); err != nil {
-			log.Printf("[WARN] nack error: %v", err)
-		}
-	} else {
-		if err := msg.Nack(false, true); err != nil {
-			log.Printf("[WARN] nack error: %v", err)
-		}
+	// Envia para DLQ sem requeue — o status já foi marcado ERROR pelo pipeline.
+	// Requeue=true causaria loop infinito pois xDeathCount não incrementa com requeue.
+	log.Printf("[WARN] falha no processamento → enviando para DLQ")
+	if err := msg.Nack(false, false); err != nil {
+		log.Printf("[WARN] nack error: %v", err)
 	}
 }
 

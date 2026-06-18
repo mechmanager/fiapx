@@ -93,6 +93,7 @@
     .stat-primary .stat-value { color: var(--primary); }
     .stat-success .stat-value { color: var(--success); }
     .stat-warning .stat-value { color: var(--warning); }
+    .stat-danger  .stat-value { color: var(--danger); }
 
     /* Section */
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
@@ -274,7 +275,13 @@ function VideoCard({ video: v }) {
     ? new Date(v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '';
 
-  const meta = [date, v.frame_count > 0 ? v.frame_count + ' frames' : null, v.status === 'ERROR' && v.error_message ? v.error_message : null]
+  function cleanError(msg) {
+    if (!msg || msg.length > 80 || /ffmpeg|exit status|libav|moov/i.test(msg))
+      return 'Arquivo corrompido ou formato não suportado';
+    return msg;
+  }
+
+  const meta = [date, v.frame_count > 0 ? v.frame_count + ' frames' : null, v.status === 'ERROR' ? cleanError(v.error_message) : null]
     .filter(Boolean).join(' · ');
 
   return e('div', { className: 'video-card' },
@@ -356,6 +363,7 @@ function DashboardView({ onLogout }) {
     total: videos.length,
     done: videos.filter(v => v.status === 'DONE').length,
     active: videos.filter(v => v.status === 'PENDING' || v.status === 'PROCESSING').length,
+    errors: videos.filter(v => v.status === 'ERROR').length,
     frames: videos.reduce((acc, v) => acc + (v.frame_count || 0), 0),
   }), [videos]);
 
@@ -366,6 +374,7 @@ function DashboardView({ onLogout }) {
       e('div', { className: 'stat-chip' },       e('span', { className: 'stat-value' }, stats.total),  e('span', { className: 'stat-label' }, 'Total')),
       e('div', { className: 'stat-chip stat-success' }, e('span', { className: 'stat-value' }, stats.done),   e('span', { className: 'stat-label' }, 'Concluídos')),
       e('div', { className: 'stat-chip stat-warning' }, e('span', { className: 'stat-value' }, stats.active), e('span', { className: 'stat-label' }, 'Processando')),
+      e('div', { className: 'stat-chip stat-danger'  }, e('span', { className: 'stat-value' }, stats.errors), e('span', { className: 'stat-label' }, 'Erros')),
       e('div', { className: 'stat-chip stat-primary' }, e('span', { className: 'stat-value' }, stats.frames), e('span', { className: 'stat-label' }, 'Frames extraídos'))
     ),
 

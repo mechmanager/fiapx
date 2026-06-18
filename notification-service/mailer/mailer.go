@@ -32,12 +32,12 @@ type SMTPMailer struct {
 	from string
 }
 
-// Send envia um e-mail via SMTP usando PlainAuth.
+// Send envia um e-mail HTML via SMTP usando PlainAuth.
 func (m *SMTPMailer) Send(to, subject, body string) error {
 	addr := fmt.Sprintf("%s:%s", m.host, m.port)
 	auth := smtp.PlainAuth("", m.user, m.pass, m.host)
 	msg := []byte(fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: %s\r\n\r\n%s",
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
 		m.from, to, subject, body,
 	))
 	return smtp.SendMail(addr, auth, m.from, []string{to}, msg)
