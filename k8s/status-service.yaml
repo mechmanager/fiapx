@@ -1,31 +1,33 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api-gateway
+  name: status-service
   namespace: fiapx
   labels:
-    app: api-gateway
+    app: status-service
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: api-gateway
+      app: status-service
   template:
     metadata:
       labels:
-        app: api-gateway
+        app: status-service
     spec:
       containers:
-        - name: api-gateway
-          image: ghcr.io/mechmanager/fiapx-api-gateway:sha-000000
+        - name: status-service
+          image: ghcr.io/mechmanager/fiapx-status-service:sha-000000
           ports:
-            - containerPort: 8080
+            - containerPort: 8083
           envFrom:
             - configMapRef:
                 name: fiapx-shared
             - configMapRef:
-                name: fiapx-gateway-config
+                name: fiapx-status-config
           env:
+            - name: POSTGRES_DSN
+              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -41,21 +43,16 @@ spec:
                 secretKeyRef:
                   name: fiapx-secrets
                   key: minio-secret-key
-            - name: JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: fiapx-secrets
-                  key: jwt-secret
           readinessProbe:
             httpGet:
               path: /health
-              port: 8080
+              port: 8083
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
-              port: 8080
+              port: 8083
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
@@ -69,32 +66,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: api-gateway
+  name: status-service
   namespace: fiapx
 spec:
-  type: LoadBalancer
   selector:
-    app: api-gateway
+    app: status-service
   ports:
-    - port: 80
-      targetPort: 8080
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-gateway-hpa
-  namespace: fiapx
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-gateway
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
+    - port: 8083
+      targetPort: 8083

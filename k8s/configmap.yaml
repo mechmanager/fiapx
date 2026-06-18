@@ -62,3 +62,17 @@ metadata:
 data:
   STATUS_PORT: "8083"
   REDIS_URL: "redis://redis:6379"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fiapx-notification-config
+  namespace: fiapx
+data:
+  NOTIFICATION_QUEUE: "notification"
+  MAX_RETRIES: "3"
+  RABBITMQ_DEFAULT_USER: "fiapx"
+  SMTP_HOST: "smtp.gmail.com"
+  SMTP_PORT: "587"
+  SMTP_USER: "mechmanager.app@gmail.com"
+  SMTP_FROM: "noreply@fiapx.com"
