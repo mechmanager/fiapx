@@ -4,213 +4,772 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FIAP X — Processador de Vídeos</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; background: #f0f2f5; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-    .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 40px; width: 100%; max-width: 520px; }
-    h1 { font-size: 1.6rem; color: #1a1a2e; margin-bottom: 4px; }
-    .subtitle { color: #444; font-size: .9rem; margin-bottom: 28px; }
-    label { font-weight: 600; font-size: .9rem; display: block; margin-bottom: 6px; color: #1a1a2e; }
-    input[type=text], input[type=email], input[type=password] {
-      width: 100%; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px;
-      font-size: .95rem; margin-bottom: 14px; outline: none;
+
+    :root {
+      --bg:        #0b0b14;
+      --surface:   #13131f;
+      --surface2:  #1c1c2e;
+      --border:    #2a2a3d;
+      --primary:   #ed0c6e;
+      --primary-h: #c4085b;
+      --accent:    #ff4d8d;
+      --text:      #f0f0f8;
+      --muted:     #8a8aaa;
+      --success:   #10b981;
+      --warning:   #f59e0b;
+      --danger:    #ef4444;
+      --radius:    12px;
     }
-    input:focus { border-color: #3a86ff; }
-    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; font-weight: 600; transition: background .2s; }
-    .btn-primary { background: #3a86ff; color: #fff; }
-    .btn-primary:hover { background: #2568d9; }
-    .btn-secondary { background: #e9ecef; color: #333; margin-top: 8px; }
-    .btn-secondary:hover { background: #dee2e6; }
-    .link { text-align: center; margin-top: 16px; font-size: .9rem; color: #444; }
-    .link button { background: none; border: none; color: #3a86ff; text-decoration: none; cursor: pointer; font-size: .9rem; padding: 0; }
-    .msg { padding: 10px 14px; border-radius: 8px; font-size: .9rem; margin-bottom: 14px; display: none; }
-    .msg.ok { background: #d4edda; color: #155724; display: block; }
-    .msg.err { background: #f8d7da; color: #721c24; display: block; }
-    .upload-area { border: 2px dashed #ccc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 14px; cursor: pointer; }
-    .upload-area:hover, .upload-area:focus { border-color: #3a86ff; outline: 2px solid #3a86ff; }
-    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
-    th { text-align: left; padding: 8px; background: #f8f9fa; border-bottom: 2px solid #dee2e6; }
-    td { padding: 8px; border-bottom: 1px solid #dee2e6; }
-    .badge { padding: 2px 8px; border-radius: 12px; font-size: .75rem; font-weight: 600; }
-    .badge-pending { background: #fff3cd; color: #5a3a00; }
-    .badge-processing { background: #cfe2ff; color: #002f7a; }
-    .badge-done { background: #d1e7dd; color: #052e16; }
-    .badge-error { background: #f8d7da; color: #44060b; }
-    .hidden { display: none; }
-    #view-dashboard { display: none; }
-    .logout-btn { background: none; border: none; cursor: pointer; color: #444; font-size: .85rem; }
-    .refresh-btn { background: none; border: none; cursor: pointer; color: #3a86ff; font-size: .85rem; }
+
+    body {
+      font-family: 'Inter', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    #root { min-height: 100vh; display: flex; flex-direction: column; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--surface); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Layout ── */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: -.5px;
+    }
+
+    .logo-badge {
+      background: var(--primary);
+      color: #fff;
+      font-size: .7rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 20px;
+      letter-spacing: .5px;
+      text-transform: uppercase;
+    }
+
+    .main { flex: 1; padding: 40px 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+
+    /* ── Auth card ── */
+    .auth-wrap {
+      min-height: calc(100vh - 64px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+    }
+
+    .auth-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .auth-card h2 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .auth-card .subtitle {
+      color: var(--muted);
+      font-size: .9rem;
+      margin-bottom: 32px;
+    }
+
+    /* ── Form elements ── */
+    .form-group { margin-bottom: 18px; }
+
+    .form-label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: .95rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .form-input:focus { border-color: var(--primary); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: .95rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .2s, transform .1s, opacity .2s;
+    }
+
+    .btn:active { transform: scale(.98); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .btn-primary { background: var(--primary); color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-h); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      font-size: .85rem;
+      padding: 8px 16px;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+
+    .btn-link {
+      background: none;
+      border: none;
+      color: var(--primary);
+      cursor: pointer;
+      font-size: .9rem;
+      font-family: inherit;
+      padding: 0;
+      text-decoration: underline;
+    }
+
+    .btn-download {
+      background: none;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: .78rem;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .2s, color .2s;
+    }
+    .btn-download:hover { background: var(--primary); color: #fff; }
+
+    /* ── Alert/Message ── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: .88rem;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .alert-err  { background: rgba(239,68,68,.12);  border: 1px solid rgba(239,68,68,.3);  color: #fca5a5; }
+    .alert-ok   { background: rgba(16,185,129,.12); border: 1px solid rgba(16,185,129,.3); color: #6ee7b7; }
+    .alert-info { background: rgba(237,12,110,.1);  border: 1px solid rgba(237,12,110,.25); color: var(--accent); }
+
+    /* ── Upload area ── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: 16px;
+      padding: 36px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s;
+      margin-bottom: 28px;
+      position: relative;
+    }
+
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--primary);
+      background: rgba(237,12,110,.04);
+    }
+
+    .upload-zone input[type=file] {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .upload-icon {
+      width: 48px;
+      height: 48px;
+      background: rgba(237,12,110,.15);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 12px;
+      font-size: 1.4rem;
+    }
+
+    .upload-zone p { color: var(--muted); font-size: .88rem; line-height: 1.6; }
+    .upload-zone strong { color: var(--text); font-size: .95rem; }
+
+    /* ── Section header ── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    .live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      margin-left: 8px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .3; }
+    }
+
+    /* ── Video table ── */
+    .video-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .video-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 16px;
+      transition: border-color .2s;
+    }
+
+    .video-card:hover { border-color: var(--border); }
+
+    .video-name {
+      font-size: .9rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .video-meta {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      white-space: nowrap;
+    }
+
+    .badge-PENDING    { background: rgba(245,158,11,.15); color: #fcd34d; border: 1px solid rgba(245,158,11,.3); }
+    .badge-PROCESSING { background: rgba(59,130,246,.15); color: #93c5fd; border: 1px solid rgba(59,130,246,.3); }
+    .badge-DONE       { background: rgba(16,185,129,.15); color: #6ee7b7; border: 1px solid rgba(16,185,129,.3); }
+    .badge-ERROR      { background: rgba(239,68,68,.15);  color: #fca5a5; border: 1px solid rgba(239,68,68,.3); }
+
+    /* ── Progress spinner ── */
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; opacity: .4; }
+    .empty-state p { font-size: .9rem; }
+
+    /* ── Stats bar ── */
+    .stats-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: .8rem;
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .stat-chip .value {
+      font-size: 1.4rem;
+      font-weight: 800;
+      display: block;
+      line-height: 1.2;
+    }
+
+    .stat-chip .label { color: var(--muted); }
+
+    .stat-primary .value { color: var(--primary); }
+    .stat-success .value { color: var(--success); }
+    .stat-warning .value { color: var(--warning); }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+    /* ── Link ── */
+    .auth-link { text-align: center; margin-top: 20px; font-size: .88rem; color: var(--muted); }
+
+    /* ── Upload progress ── */
+    .upload-progress {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      margin-bottom: 14px;
+      font-size: .85rem;
+    }
+
+    .progress-bar-wrap {
+      background: var(--border);
+      border-radius: 4px;
+      height: 4px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 4px;
+      transition: width .3s;
+    }
   </style>
 </head>
 <body>
-<div class="card">
+<div id="root"></div>
 
-  <!-- VIEW: Login -->
-  <div id="view-login">
-    <h1>FIAP X</h1>
-    <p class="subtitle">Processador de Vídeos</p>
-    <div id="login-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label for="login-email">Email</label>
-    <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
-    <label for="login-password">Senha</label>
-    <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password" />
-    <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
-    <p class="link">Não tem conta? <button onclick="showRegister()">Cadastre-se</button></p>
-  </div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
 
-  <!-- VIEW: Register -->
-  <div id="view-register" class="hidden">
-    <h1>Criar conta</h1>
-    <p class="subtitle">FIAP X — Processador de Vídeos</p>
-    <div id="reg-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label for="reg-name">Nome</label>
-    <input type="text" id="reg-name" placeholder="Seu nome" autocomplete="name" />
-    <label for="reg-email">Email</label>
-    <input type="email" id="reg-email" placeholder="seu@email.com" autocomplete="email" />
-    <label for="reg-password">Senha</label>
-    <input type="password" id="reg-password" placeholder="mínimo 6 caracteres" autocomplete="new-password" />
-    <button class="btn btn-primary" onclick="doRegister()">Criar conta</button>
-    <button class="btn btn-secondary" onclick="showLogin()">Voltar ao login</button>
-  </div>
+// ── API helpers ───────────────────────────────────────────────────────────────
 
-  <!-- VIEW: Dashboard -->
-  <div id="view-dashboard">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-      <h1>Meus Vídeos</h1>
-      <button class="logout-btn" onclick="doLogout()">Sair</button>
+let _token = localStorage.getItem('fiapx_token') || '';
+
+const getToken = () => _token;
+const setToken = t => { _token = t; if (t) localStorage.setItem('fiapx_token', t); else localStorage.removeItem('fiapx_token'); };
+
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  if (_token) headers['Authorization'] = 'Bearer ' + _token;
+  const r = await fetch(path, { ...opts, headers });
+  const body = await r.json().catch(() => ({}));
+  return { ok: r.ok, status: r.status, body };
+}
+
+async function downloadZip(id, filename) {
+  const r = await fetch('/videos/' + id + '/download', { headers: { Authorization: 'Bearer ' + _token } });
+  if (!r.ok) { alert('Erro ao baixar o arquivo'); return; }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'frames-' + (filename || id) + '.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ── Shared components ─────────────────────────────────────────────────────────
+
+function Alert({ type, children }) {
+  if (!children) return null;
+  return <div className={`alert alert-${type}`}>{children}</div>;
+}
+
+function Badge({ status }) {
+  const labels = { PENDING: 'Pendente', PROCESSING: 'Processando', DONE: 'Concluído', ERROR: 'Erro' };
+  return <span className={`badge badge-${status}`}>{labels[status] || status}</span>;
+}
+
+function Spinner() {
+  return <span className="spinner" />;
+}
+
+// ── Login view ────────────────────────────────────────────────────────────────
+
+function LoginView({ onLogin, onGoRegister }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setError(''); setLoading(true);
+    const { ok, body } = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    setLoading(false);
+    if (!ok) { setError(body.error || 'Erro ao fazer login'); return; }
+    setToken(body.token);
+    onLogin();
+  }
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2>Bem-vindo de volta</h2>
+        <p className="subtitle">Entre na sua conta para continuar</p>
+        <Alert type="err">{error}</Alert>
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required autoComplete="email" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Senha</label>
+            <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••" required autoComplete="current-password" />
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? <Spinner /> : null} Entrar
+          </button>
+        </form>
+        <p className="auth-link">Não tem conta? <button className="btn-link" onClick={onGoRegister}>Cadastre-se</button></p>
+      </div>
     </div>
-    <div id="upload-msg" class="msg" role="alert" aria-live="polite"></div>
-    <label
-      class="upload-area"
-      for="file-input"
-      tabindex="0"
-      onkeydown="if(event.key==='Enter'||event.key===' ')document.getElementById('file-input').click()"
-    >
-      <p>Clique para selecionar um ou mais vídeos</p>
-      <p style="font-size:.8rem;color:#666;margin-top:4px;">MP4, AVI, MOV, MKV, WMV, FLV, WEBM</p>
-      <input type="file" id="file-input" accept="video/*" multiple style="display:none" onchange="doUpload(this)" />
-    </label>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-      <strong style="font-size:.9rem;">Histórico</strong>
-      <button class="refresh-btn" onclick="loadVideos()">Atualizar</button>
+  );
+}
+
+// ── Register view ─────────────────────────────────────────────────────────────
+
+function RegisterView({ onGoLogin }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [msg, setMsg] = useState({ type: '', text: '' });
+  const [loading, setLoading] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setMsg({ type: '', text: '' }); setLoading(true);
+    const { ok, body } = await api('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+    setLoading(false);
+    if (!ok) { setMsg({ type: 'err', text: body.error || 'Erro ao cadastrar' }); return; }
+    setMsg({ type: 'ok', text: 'Conta criada com sucesso! Redirecionando...' });
+    setTimeout(onGoLogin, 1500);
+  }
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2>Criar conta</h2>
+        <p className="subtitle">Cadastre-se para começar a processar vídeos</p>
+        <Alert type={msg.type}>{msg.text}</Alert>
+        <form onSubmit={submit}>
+          <div className="form-group">
+            <label className="form-label">Nome</label>
+            <input className="form-input" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Seu nome completo" required autoComplete="name" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Email</label>
+            <input className="form-input" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="seu@email.com" required autoComplete="email" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Senha</label>
+            <input className="form-input" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="mínimo 6 caracteres" required autoComplete="new-password" />
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={loading}>
+            {loading ? <Spinner /> : null} Criar conta
+          </button>
+        </form>
+        <p className="auth-link">Já tem conta? <button className="btn-link" onClick={onGoLogin}>Entrar</button></p>
+      </div>
     </div>
-    <table>
-      <thead><tr><th>Arquivo</th><th>Status</th><th>Ação</th></tr></thead>
-      <tbody id="videos-tbody"><tr><td colspan="3" style="text-align:center;color:#444;">Carregando...</td></tr></tbody>
-    </table>
-  </div>
+  );
+}
 
-</div>
-<script>
-  let token = localStorage.getItem('fiapx_token') || '';
+// ── Dashboard view ────────────────────────────────────────────────────────────
 
-  function show(id) {
-    ['view-login','view-register','view-dashboard'].forEach(v => {
-      document.getElementById(v).style.display = (v === id) ? 'block' : 'none';
-    });
-  }
-  function showLogin()    { clearMsgs(); show('view-login'); }
-  function showRegister() { clearMsgs(); show('view-register'); }
-  function clearMsgs()    { document.querySelectorAll('.msg').forEach(el => { el.className='msg'; el.textContent=''; }); }
-  function setMsg(id, text, ok) { const el=document.getElementById(id); el.textContent=text; el.className='msg '+(ok?'ok':'err'); }
+function DashboardView({ onLogout }) {
+  const [videos, setVideos] = useState([]);
+  const [loadErr, setLoadErr] = useState('');
+  const [uploadMsg, setUploadMsg] = useState({ type: '', text: '' });
+  const [uploading, setUploading] = useState([]);
+  const [dragOver, setDragOver] = useState(false);
+  const pollingRef = useRef(null);
 
-  async function api(path, opts={}) {
-    const headers = { 'Content-Type': 'application/json', ...opts.headers };
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const r = await fetch(path, { ...opts, headers });
-    const body = await r.json().catch(() => ({}));
-    return { ok: r.ok, status: r.status, body };
-  }
+  const hasActive = videos.some(v => v.status === 'PENDING' || v.status === 'PROCESSING');
 
-  async function doLogin() {
-    const email = document.getElementById('login-email').value;
-    const password = document.getElementById('login-password').value;
-    const { ok, body } = await api('/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
-    if (!ok) { setMsg('login-msg', body.error || 'Erro ao fazer login', false); return; }
-    token = body.token;
-    localStorage.setItem('fiapx_token', token);
-    show('view-dashboard');
-    await loadVideos();
-  }
-
-  async function doRegister() {
-    const name = document.getElementById('reg-name').value;
-    const email = document.getElementById('reg-email').value;
-    const password = document.getElementById('reg-password').value;
-    const { ok, body } = await api('/auth/register', { method:'POST', body: JSON.stringify({ name, email, password }) });
-    if (!ok) { setMsg('reg-msg', body.error || 'Erro ao cadastrar', false); return; }
-    setMsg('reg-msg', 'Conta criada! Faça login.', true);
-    setTimeout(showLogin, 1500);
-  }
-
-  function doLogout() {
-    token = ''; localStorage.removeItem('fiapx_token'); showLogin();
-  }
-
-  async function doUpload(input) {
-    const files = Array.from(input.files);
-    if (!files.length) return;
-    let sent = 0;
-    for (const file of files) {
-      const fd = new FormData();
-      fd.append('video', file);
-      const r = await fetch('/videos', { method:'POST', headers:{ Authorization:'Bearer '+token }, body: fd });
-      const body = await r.json().catch(() => ({}));
-      if (!r.ok) { setMsg('upload-msg', body.error || 'Erro no upload de ' + file.name, false); input.value=''; return; }
-      sent++;
-    }
-    setMsg('upload-msg', sent > 1 ? sent + ' vídeos enviados!' : 'Vídeo enviado!', true);
-    input.value = '';
-    setTimeout(loadVideos, 800);
-  }
-
-  async function downloadZip(id) {
-    const r = await fetch('/videos/' + id + '/download', { headers: { Authorization: 'Bearer ' + token } });
-    if (!r.ok) { alert('Erro ao baixar o arquivo'); return; }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'frames-' + id + '.zip';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-
-  async function loadVideos() {
+  const fetchVideos = useCallback(async () => {
     const { ok, body } = await api('/videos');
-    const tbody = document.getElementById('videos-tbody');
-    if (!ok || !Array.isArray(body)) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo encontrado.</td></tr>';
-      return;
+    if (!ok) { setLoadErr('Erro ao carregar vídeos'); return; }
+    setLoadErr('');
+    setVideos(Array.isArray(body) ? body : []);
+  }, []);
+
+  // Poll every 4s when there are active videos, stop when all done
+  useEffect(() => {
+    fetchVideos();
+  }, []);
+
+  useEffect(() => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (hasActive) {
+      pollingRef.current = setInterval(fetchVideos, 4000);
     }
-    if (body.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#444;">Nenhum vídeo enviado ainda.</td></tr>';
-      return;
-    }
-    const badgeClass = { PENDING:'badge-pending', PROCESSING:'badge-processing', DONE:'badge-done', ERROR:'badge-error' };
-    tbody.innerHTML = body.map(v => {
-      const badge = badgeClass[v.status] || '';
-      let action;
-      if (v.status === 'DONE') {
-        action = `<button onclick="downloadZip('${v.id}')" style="background:none;border:none;color:#3a86ff;font-size:.85rem;cursor:pointer;padding:0;">Baixar ZIP</button>`;
-      } else {
-        action = `<span style="color:#444;font-size:.85rem;">${v.status === 'ERROR' ? (v.error_message || 'Erro') : '—'}</span>`;
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [hasActive, fetchVideos]);
+
+  async function handleFiles(files) {
+    if (!files.length) return;
+    setUploadMsg({ type: '', text: '' });
+    const list = Array.from(files);
+    const progress = list.map(f => ({ name: f.name, done: false, error: false }));
+    setUploading(progress);
+
+    let sent = 0;
+    for (let i = 0; i < list.length; i++) {
+      const fd = new FormData();
+      fd.append('video', list[i]);
+      const r = await fetch('/videos', { method: 'POST', headers: { Authorization: 'Bearer ' + getToken() }, body: fd });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setUploading(prev => prev.map((p, j) => j === i ? { ...p, error: true } : p));
+        setUploadMsg({ type: 'err', text: body.error || 'Erro no upload de ' + list[i].name });
+        break;
       }
-      const name = v.original_filename.length > 28 ? v.original_filename.slice(0, 25) + '...' : v.original_filename;
-      return `<tr>
-        <td title="${v.original_filename}">${name}</td>
-        <td><span class="badge ${badge}">${v.status}</span></td>
-        <td>${action}</td>
-      </tr>`;
-    }).join('');
+      sent++;
+      setUploading(prev => prev.map((p, j) => j === i ? { ...p, done: true } : p));
+    }
+
+    if (sent > 0) {
+      setUploadMsg({ type: 'ok', text: sent > 1 ? `${sent} vídeos enviados para processamento!` : 'Vídeo enviado para processamento!' });
+    }
+    await fetchVideos();
+    setTimeout(() => { setUploading([]); setUploadMsg({ type: '', text: '' }); }, 4000);
   }
 
-  (async () => {
-    if (token) { show('view-dashboard'); await loadVideos(); }
-    else showLogin();
-  })();
+  function onFileChange(e) { handleFiles(e.target.files); e.target.value = ''; }
+
+  function onDrop(e) {
+    e.preventDefault(); setDragOver(false);
+    const files = e.dataTransfer.files;
+    const videos = Array.from(files).filter(f => f.type.startsWith('video/'));
+    if (videos.length) handleFiles(videos);
+  }
+
+  const stats = {
+    total: videos.length,
+    done: videos.filter(v => v.status === 'DONE').length,
+    processing: videos.filter(v => v.status === 'PENDING' || v.status === 'PROCESSING').length,
+  };
+
+  const totalFrames = videos.reduce((acc, v) => acc + (v.frame_count || 0), 0);
+
+  return (
+    <div className="main">
+      {/* Stats */}
+      {videos.length > 0 && (
+        <div className="stats-bar">
+          <div className="stat-chip">
+            <span className="value">{stats.total}</span>
+            <span className="label">Total</span>
+          </div>
+          <div className="stat-chip stat-success">
+            <span className="value">{stats.done}</span>
+            <span className="label">Concluídos</span>
+          </div>
+          <div className="stat-chip stat-warning">
+            <span className="value">{stats.processing}</span>
+            <span className="label">Em processamento</span>
+          </div>
+          <div className="stat-chip stat-primary">
+            <span className="value">{totalFrames}</span>
+            <span className="label">Frames extraídos</span>
+          </div>
+        </div>
+      )}
+
+      {/* Upload zone */}
+      <div
+        className={`upload-zone${dragOver ? ' drag-over' : ''}`}
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+      >
+        <input type="file" accept="video/*" multiple onChange={onFileChange} />
+        <div className="upload-icon">🎬</div>
+        <strong>Arraste vídeos aqui ou clique para selecionar</strong>
+        <p>MP4 · AVI · MOV · MKV · WMV · FLV · WEBM<br/>Múltiplos arquivos suportados</p>
+      </div>
+
+      {/* Upload progress */}
+      {uploading.length > 0 && (
+        <div className="upload-progress">
+          {uploading.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              {f.done ? '✅' : f.error ? '❌' : <Spinner />}
+              <span style={{ fontSize: '.85rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Alert type={uploadMsg.type}>{uploadMsg.text}</Alert>
+
+      {/* Video list */}
+      <div className="section-header">
+        <span className="section-title">
+          Meus Vídeos
+          {hasActive && <span className="live-dot" title="Atualizando automaticamente" />}
+        </span>
+        <button className="btn btn-ghost" onClick={fetchVideos}>Atualizar</button>
+      </div>
+
+      <Alert type="err">{loadErr}</Alert>
+
+      {videos.length === 0 ? (
+        <div className="empty-state">
+          <div className="icon">📂</div>
+          <p>Nenhum vídeo enviado ainda.<br/>Faça upload para começar.</p>
+        </div>
+      ) : (
+        <div className="video-list">
+          {videos.map(v => (
+            <VideoCard key={v.id} video={v} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function VideoCard({ video: v }) {
+  const [downloading, setDownloading] = useState(false);
+
+  async function handleDownload() {
+    setDownloading(true);
+    await downloadZip(v.id, v.original_filename.replace(/\.[^.]+$/, ''));
+    setDownloading(false);
+  }
+
+  const date = v.created_at ? new Date(v.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+
+  return (
+    <div className="video-card">
+      <div style={{ overflow: 'hidden' }}>
+        <div className="video-name" title={v.original_filename}>{v.original_filename}</div>
+        <div className="video-meta">
+          {date}
+          {v.frame_count > 0 ? ` · ${v.frame_count} frames` : ''}
+          {v.status === 'ERROR' && v.error_message ? ` · ${v.error_message}` : ''}
+        </div>
+      </div>
+
+      <Badge status={v.status} />
+
+      <div style={{ width: 90, display: 'flex', justifyContent: 'flex-end' }}>
+        {v.status === 'DONE' && (
+          <button className="btn-download" onClick={handleDownload} disabled={downloading}>
+            {downloading ? <Spinner /> : '⬇ ZIP'}
+          </button>
+        )}
+        {(v.status === 'PENDING' || v.status === 'PROCESSING') && (
+          <Spinner />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── App root ──────────────────────────────────────────────────────────────────
+
+function App() {
+  const [view, setView] = useState(getToken() ? 'dashboard' : 'login');
+
+  function handleLogin() { setView('dashboard'); }
+  function handleLogout() { setToken(''); setView('login'); }
+
+  return (
+    <>
+      <header className="app-header">
+        <div className="logo">
+          FIAP<span style={{ color: 'var(--primary)', marginLeft: 2 }}>X</span>
+          <span className="logo-badge">Pos Tech</span>
+        </div>
+        {view === 'dashboard' && (
+          <button className="btn btn-ghost" onClick={handleLogout}>Sair</button>
+        )}
+      </header>
+
+      {view === 'login'     && <LoginView    onLogin={handleLogin}           onGoRegister={() => setView('register')} />}
+      {view === 'register'  && <RegisterView onGoLogin={() => setView('login')} />}
+      {view === 'dashboard' && <DashboardView onLogout={handleLogout} />}
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 </script>
 </body>
 </html>
