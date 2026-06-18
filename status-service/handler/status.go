@@ -19,6 +19,7 @@ import (
 type StatusUseCase interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]*domain.Video, error)
 	GetDownloadStream(ctx context.Context, userID, videoID uuid.UUID) (io.ReadCloser, error)
+	DeleteVideo(ctx context.Context, userID, videoID uuid.UUID) error
 }
 
 // StatusHandler expõe os endpoints de consulta e download de vídeos.
@@ -117,6 +118,38 @@ func (h *StatusHandler) Download(c *gin.Context) {
 	if _, err := io.Copy(c.Writer, stream); err != nil {
 		log.Printf("service=status-service event=download status=erro_stream msg=\"falha ao transmitir arquivo\" video_id=%s err=%v", videoID, err)
 	}
+}
+
+// Delete trata DELETE /videos/:id — remove o vídeo e seus arquivos do storage.
+func (h *StatusHandler) Delete(c *gin.Context) {
+	userID, ok := parseUserID(c)
+	if !ok {
+		return
+	}
+
+	videoID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id inválido"})
+		return
+	}
+
+	log.Printf("service=status-service event=delete msg=\"solicitação de exclusão de vídeo\" user_id=%s video_id=%s", userID, videoID)
+
+	if err := h.svc.DeleteVideo(c.Request.Context(), userID, videoID); err != nil {
+		switch {
+		case errors.Is(err, domain.ErrVideoNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "vídeo não encontrado"})
+		case service.IsOwnershipError(err):
+			c.JSON(http.StatusForbidden, gin.H{"error": "acesso negado"})
+		default:
+			log.Printf("service=status-service event=delete status=erro msg=\"falha ao excluir vídeo\" user_id=%s video_id=%s err=%v", userID, videoID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "erro ao excluir vídeo"})
+		}
+		return
+	}
+
+	log.Printf("service=status-service event=delete status=ok msg=\"vídeo excluído com sucesso\" user_id=%s video_id=%s", userID, videoID)
+	c.Status(http.StatusNoContent)
 }
 
 // parseUserID lê e valida o header X-User-ID. Responde 401 se ausente ou inválido.

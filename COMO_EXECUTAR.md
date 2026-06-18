@@ -148,7 +148,95 @@ curl -s http://localhost:8080/videos -H "Authorization: Bearer $TOKEN" | jq '.[]
 
 ---
 
-## 6. Observabilidade
+## 6. Cenário de demonstração: notificação de falha por e-mail
+
+Este cenário demonstra o fluxo completo de erro — upload de vídeo inválido, falha no processamento, atualização do status no frontend e envio de e-mail de notificação.
+
+> **Pré-requisito:** configure as variáveis SMTP no `.env` com um servidor real (ex.: Gmail) e reinicie os containers se necessário.
+
+### Passo 1 — Criar arquivo corrompido de teste
+
+```bash
+printf 'FAKE_CORRUPTED_VIDEO_DATA_NOT_A_REAL_MP4_FILE' > /tmp/video_corrompido.mp4
+```
+
+### Passo 2 — Abrir o frontend e fazer login
+
+```
+http://localhost:8080
+```
+
+Faça login com o usuário que tem o e-mail configurado para receber notificações.
+
+### Passo 3 — Enviar o arquivo corrompido
+
+Arraste `video_corrompido.mp4` para a zona de upload **ou** use o curl:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"seu@email.com","password":"suasenha"}' | jq -r '.token')
+
+curl -s -X POST http://localhost:8080/videos \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "video=@/tmp/video_corrompido.mp4" | jq
+# {"id":"<uuid>","status":"PENDING"}
+```
+
+### Passo 4 — Observar a atualização de status no frontend
+
+O card do vídeo evolui automaticamente a cada 4 s:
+
+```
+PENDING → PROCESSING → ERROR
+```
+
+A mensagem exibida será:  
+**"Arquivo corrompido ou formato não suportado"**
+
+O contador **Erros** na barra de estatísticas incrementa.
+
+### Passo 5 — Verificar os logs do worker
+
+```bash
+docker compose logs -f worker
+```
+
+Você verá exatamente uma tentativa de processamento e o envio para a DLQ:
+
+```
+service=worker event=processamento msg="mensagem recebida da fila - iniciando processamento" ...
+service=worker event=processamento status=erro msg="falha ao processar vídeo" ...
+[WARN] falha no processamento → enviando para DLQ
+```
+
+### Passo 6 — Verificar o e-mail recebido
+
+Abra a caixa de entrada do e-mail cadastrado.  
+Você receberá **exatamente 1 e-mail** com o assunto:
+
+```
+[FIAP X] Erro ao processar seu vídeo
+```
+
+O corpo exibe o nome do arquivo, orientações sobre o que verificar e o tema visual do FIAP X.
+
+### Passo 7 — Excluir o vídeo com erro do histórico
+
+No frontend, clique no ícone 🗑 ao lado do vídeo com status **Erro**.  
+Confirme a exclusão. O vídeo é removido do banco de dados e os arquivos são apagados do storage.
+
+Ou via API:
+
+```bash
+curl -s -X DELETE "http://localhost:8080/videos/<uuid>" \
+  -H "Authorization: Bearer $TOKEN"
+# HTTP 204 No Content
+```
+
+---
+
+## 7. Observabilidade
 
 ### Prometheus
 ```
@@ -192,7 +280,7 @@ O dashboard **"FIAP X — Monitoramento"** já aparece automaticamente na pasta 
 
 ---
 
-## 7. UIs de administração
+## 8. UIs de administração
 
 | Serviço | URL | Credenciais |
 |---------|-----|-------------|
@@ -204,7 +292,7 @@ O dashboard **"FIAP X — Monitoramento"** já aparece automaticamente na pasta 
 
 ---
 
-## 8. Escalar workers
+## 9. Escalar workers
 
 Para processar mais vídeos em paralelo (ex.: 3 workers simultâneos):
 
@@ -216,7 +304,7 @@ Cada worker consome da mesma fila `video.upload` com prefetch 5.
 
 ---
 
-## 9. Ver logs de um serviço
+## 10. Ver logs de um serviço
 
 ```bash
 docker compose logs -f worker
@@ -226,7 +314,7 @@ docker compose logs -f notification-service
 
 ---
 
-## 10. Parar tudo
+## 11. Parar tudo
 
 ```bash
 # Mantém os dados (banco, MinIO, Grafana)

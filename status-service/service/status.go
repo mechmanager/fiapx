@@ -48,6 +48,22 @@ func (s *StatusService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*do
 	return videos, nil
 }
 
+// DeleteVideo valida a propriedade, apaga os arquivos do storage e remove o registro do banco.
+func (s *StatusService) DeleteVideo(ctx context.Context, userID, videoID uuid.UUID) error {
+	video, err := s.repo.FindByID(ctx, videoID)
+	if err != nil {
+		return err
+	}
+	if video.UserID != userID {
+		return &ownershipError{}
+	}
+
+	// Apaga arquivos do object storage (best-effort: não falha se já não existirem).
+	_ = s.storage.Delete(ctx, video.S3Key, video.ZipS3Key)
+
+	return s.repo.Delete(ctx, videoID)
+}
+
 // GetDownloadStream valida a propriedade do vídeo e retorna o stream do zip de frames.
 func (s *StatusService) GetDownloadStream(ctx context.Context, userID, videoID uuid.UUID) (io.ReadCloser, error) {
 	video, err := s.repo.FindByID(ctx, videoID)
