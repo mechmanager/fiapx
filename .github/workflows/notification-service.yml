@@ -6,10 +6,6 @@ on:
     paths:
       - "notification-service/**"
       - ".github/workflows/notification-service.yml"
-  pull_request:
-    paths:
-      - "notification-service/**"
-
 concurrency:
   group: notification-service-${{ github.ref }}
   cancel-in-progress: true

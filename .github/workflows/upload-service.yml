@@ -6,10 +6,6 @@ on:
     paths:
       - "upload-service/**"
       - ".github/workflows/upload-service.yml"
-  pull_request:
-    paths:
-      - "upload-service/**"
-
 concurrency:
   group: upload-service-${{ github.ref }}
   cancel-in-progress: true

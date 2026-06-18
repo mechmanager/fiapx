@@ -6,10 +6,6 @@ on:
     paths:
       - "worker/**"
       - ".github/workflows/worker.yml"
-  pull_request:
-    paths:
-      - "worker/**"
-
 concurrency:
   group: worker-${{ github.ref }}
   cancel-in-progress: true
