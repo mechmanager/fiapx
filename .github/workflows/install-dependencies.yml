@@ -1,80 +1,134 @@
-name: Install Dependencies
+# .github/workflows/install-dependencies.yml
+name: install-dependencies
 
 on:
   workflow_call:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment'
+    secrets:
+      AWS_ACCESS_KEY_ID:
         required: true
-        default: 'production'
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_SESSION_TOKEN:
+        required: false
+      POSTGRES_PASSWORD:
+        required: true
+      RABBITMQ_PASSWORD:
+        required: true
+      MINIO_ACCESS_KEY:
+        required: true
+      MINIO_SECRET_KEY:
+        required: true
+      JWT_SECRET:
+        required: true
+      SMTP_PASSWORD:
+        required: true
+      GRAFANA_ADMIN_PASSWORD:
+        required: true
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: fiapx
 
 jobs:
   install-dependencies:
+    name: Install Infra Dependencies
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Setup Kubeconfig
+      # ── AWS credentials ────────────────────────────────────────────────────
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # ── kubeconfig ─────────────────────────────────────────────────────────
+      - name: Atualizar kubeconfig para EKS
         run: |
-          mkdir -p ~/.kube
-          echo "${{ secrets.KUBECONFIG }}" > ~/.kube/config
+          aws eks update-kubeconfig \
+            --name ${{ env.CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
 
-      - name: Install Helm
-        uses: azure/setup-helm@v3
-
-      - name: Add Helm Repos
+      # ── Namespace ──────────────────────────────────────────────────────────
+      - name: Criar namespace fiapx
         run: |
-          helm repo add bitnami https://charts.bitnami.com/bitnami
-          helm repo add elastic https://helm.elastic.co
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo add grafana https://grafana.github.io/helm-charts
-          helm repo update
+          kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
 
-      # ✅ Usando kubectl apply com os arquivos YAML já existentes em k8s/
-      - name: Create Namespace
-        run: kubectl apply -f k8s/namespace.yaml
-
-      - name: Apply Secrets
-        run: kubectl apply -f k8s/secrets.yaml
-
-      - name: Apply ConfigMap
-        run: kubectl apply -f k8s/configmap.yaml
-
-      - name: Deploy PostgreSQL
-        run: kubectl apply -f k8s/postgres.yaml
-
-      - name: Deploy RabbitMQ
-        run: kubectl apply -f k8s/rabbitmq.yaml
-
-      - name: Deploy MinIO
-        run: kubectl apply -f k8s/minio.yaml
-
-      - name: Deploy Redis
-        run: kubectl apply -f k8s/redis.yaml
-
-      - name: Deploy Elasticsearch
-        run: kubectl apply -f k8s/elasticsearch.yaml
-
-      - name: Deploy Logstash
-        run: kubectl apply -f k8s/logstash.yaml
-
-      - name: Deploy Kibana
-        run: kubectl apply -f k8s/kibana.yaml
-
-      - name: Deploy Filebeat
-        run: kubectl apply -f k8s/filebeat.yaml
-
-      - name: Deploy Prometheus
-        run: kubectl apply -f k8s/prometheus.yaml
-
-      - name: Deploy Grafana
-        run: kubectl apply -f k8s/grafana.yaml
-
-      - name: Wait for Dependencies
+      # ── Secrets ────────────────────────────────────────────────────────────
+      - name: Aplicar secrets do Kubernetes
         run: |
-          kubectl rollout status deployment/postgresql -n fiap-x --timeout=120s
-          kubectl rollout status deployment/rabbitmq -n fiap-x --timeout=120s
-          kubectl rollout status deployment/minio -n fiap-x --timeout=120s
-          kubectl rollout status deployment/redis -n fiap-x --timeout=120s
+          kubectl create secret generic fiapx-secrets \
+            --namespace fiapx \
+            --from-literal=postgres-password=${{ secrets.POSTGRES_PASSWORD }} \
+            --from-literal=rabbitmq-password=${{ secrets.RABBITMQ_PASSWORD }} \
+            --from-literal=minio-access-key=${{ secrets.MINIO_ACCESS_KEY }} \
+            --from-literal=minio-secret-key=${{ secrets.MINIO_SECRET_KEY }} \
+            --from-literal=jwt-secret=${{ secrets.JWT_SECRET }} \
+            --from-literal=smtp-password=${{ secrets.SMTP_PASSWORD }} \
+            --from-literal=grafana-admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --save-config \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      # ── Manifestos de infraestrutura ───────────────────────────────────────
+      - name: Aplicar PostgreSQL
+        run: kubectl apply -f k8s/postgres.yaml --namespace fiapx
+
+      - name: Aplicar RabbitMQ
+        run: kubectl apply -f k8s/rabbitmq.yaml --namespace fiapx
+
+      - name: Aplicar MinIO
+        run: kubectl apply -f k8s/minio.yaml --namespace fiapx
+
+      - name: Aplicar Redis
+        run: kubectl apply -f k8s/redis.yaml --namespace fiapx
+
+      - name: Aplicar Elasticsearch
+        run: kubectl apply -f k8s/elasticsearch.yaml --namespace fiapx
+
+      - name: Aplicar Logstash
+        run: kubectl apply -f k8s/logstash.yaml --namespace fiapx
+
+      - name: Aplicar Kibana
+        run: kubectl apply -f k8s/kibana.yaml --namespace fiapx
+
+      - name: Aplicar Filebeat
+        run: kubectl apply -f k8s/filebeat.yaml --namespace fiapx
+
+      - name: Aplicar Prometheus
+        run: kubectl apply -f k8s/prometheus.yaml --namespace fiapx
+
+      - name: Aplicar Grafana
+        run: kubectl apply -f k8s/grafana.yaml --namespace fiapx
+
+      # ── Aguardar dependências críticas ─────────────────────────────────────
+      - name: Aguardar PostgreSQL
+        run: |
+          kubectl rollout status deployment/postgres \
+            --namespace fiapx \
+            --timeout=180s
+
+      - name: Aguardar RabbitMQ
+        run: |
+          kubectl rollout status deployment/rabbitmq \
+            --namespace fiapx \
+            --timeout=180s
+
+      - name: Aguardar MinIO
+        run: |
+          kubectl rollout status deployment/minio \
+            --namespace fiapx \
+            --timeout=180s
+
+      - name: Aguardar Redis
+        run: |
+          kubectl rollout status deployment/redis \
+            --namespace fiapx \
+            --timeout=180s
