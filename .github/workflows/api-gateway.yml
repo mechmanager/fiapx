@@ -15,6 +15,7 @@ env:
   GO_VERSION: "1.23"
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/fiapx-api-gateway
+  NAMESPACE: fiapx
 
 jobs:
   # ────────────────────────────────────────────────
@@ -61,7 +62,6 @@ jobs:
       packages: write
     outputs:
       image-tag: ${{ steps.sha.outputs.short }}
-      namespace: ${{ steps.ns.outputs.name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -78,28 +78,6 @@ jobs:
         id: sha
         run: echo "short=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
-      - name: Calcular namespace
-        id: ns
-        run: |
-          # Sanitiza o nome da branch para uso no namespace
-          # feature/minha-feature → fiapx-feature-minha-feature
-          BRANCH="${{ github.ref_name }}"
-          SAFE=$(echo "$BRANCH" \
-            | tr '[:upper:]' '[:lower:]' \
-            | sed 's/[^a-z0-9-]/-/g' \
-            | sed 's/--*/-/g' \
-            | sed 's/^-//;s/-$//' \
-            | cut -c1-40)
-
-          if [ "$BRANCH" = "main" ]; then
-            NS="fiapx-production"
-          else
-            NS="fiapx-${SAFE}"
-          fi
-
-          echo "name=$NS" >> "$GITHUB_OUTPUT"
-          echo "→ Namespace: $NS"
-
       - name: Metadados da imagem
         id: meta
         uses: docker/metadata-action@v5
@@ -115,7 +93,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./api-gateway
-          push: true           # ← push em TODAS as branches
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -123,11 +101,11 @@ jobs:
 
   # ────────────────────────────────────────────────
   deploy:
-    name: Deploy → ${{ needs.docker.outputs.namespace }}
+    name: Deploy → fiapx
     runs-on: ubuntu-latest
     needs: docker
     concurrency:
-      group: deploy-eks-${{ needs.docker.outputs.namespace }}  # ← isolado por namespace
+      group: deploy-eks-fiapx
       cancel-in-progress: false
     permissions:
       contents: read
@@ -136,7 +114,6 @@ jobs:
     env:
       AWS_REGION: us-east-1
       CLUSTER_NAME: fiapx
-      NAMESPACE: ${{ needs.docker.outputs.namespace }}
       TAG: sha-${{ needs.docker.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
@@ -155,22 +132,10 @@ jobs:
             --name ${{ env.CLUSTER_NAME }} \
             --region ${{ env.AWS_REGION }}
 
-      - name: Criar namespace se não existir
-        run: |
-          kubectl create namespace ${{ env.NAMESPACE }} \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-          # Label para identificar ambiente
-          kubectl label namespace ${{ env.NAMESPACE }} \
-            environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} \
-            branch=${{ github.ref_name }} \
-            managed-by=github-actions \
-            --overwrite
-
       - name: Aplicar secrets
         run: |
           kubectl create secret generic fiapx-secrets \
-            --namespace ${{ env.NAMESPACE }} \
+            --namespace fiapx \
             --from-literal=postgres-password=${{ secrets.POSTGRES_PASSWORD }} \
             --from-literal=rabbitmq-password=${{ secrets.RABBITMQ_PASSWORD }} \
             --from-literal=minio-access-key=${{ secrets.MINIO_ACCESS_KEY }} \
@@ -181,35 +146,33 @@ jobs:
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy no namespace da branch
+      - name: Deploy
         run: |
-          echo "→ Namespace : ${{ env.NAMESPACE }}"
+          echo "→ Namespace : fiapx"
           echo "→ Imagem    : ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"
 
-          # Aplica os manifests base no namespace correto
           kubectl apply -f k8s/api-gateway/ \
-            --namespace ${{ env.NAMESPACE }}
+            --namespace fiapx
 
-          # Atualiza só a imagem deste serviço
           kubectl set image deployment/api-gateway \
             api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
-            --namespace ${{ env.NAMESPACE }}
+            --namespace fiapx
 
       - name: Aguardar rollout
         run: |
           kubectl rollout status deployment/api-gateway \
-            --namespace ${{ env.NAMESPACE }} \
+            --namespace fiapx \
             --timeout=300s
 
-      - name: 🌐 Endpoint do ambiente
+      - name: Endpoint
         run: |
           LB=$(kubectl get svc api-gateway \
-            --namespace ${{ env.NAMESPACE }} \
-            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pendente")
+            --namespace fiapx \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' \
+            2>/dev/null || echo "pendente")
           echo ""
           echo "╔══════════════════════════════════════════╗"
-          echo "║  Ambiente : ${{ env.NAMESPACE }}"
-          echo "║  Branch   : ${{ github.ref_name }}"
-          echo "║  Imagem   : ${{ env.TAG }}"
-          echo "║  URL      : http://$LB"
+          echo "║  Namespace : fiapx"
+          echo "║  Imagem    : ${{ env.TAG }}"
+          echo "║  URL       : http://$LB"
           echo "╚══════════════════════════════════════════╝"
