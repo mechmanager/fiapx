@@ -109,26 +109,36 @@ jobs:
         run: kubectl apply -f k8s/grafana.yaml --namespace fiapx
 
       # ── Aguardar dependências críticas ─────────────────────────────────────
-      - name: Aguardar PostgreSQL
+      - name: Aguardar dependências críticas
         run: |
-          kubectl rollout status deployment/postgres \
-            --namespace fiapx \
-            --timeout=180s
+          wait_for_resource() {
+            local name=$1
+            local ns=$2
+            local timeout=$3
 
-      - name: Aguardar RabbitMQ
-        run: |
-          kubectl rollout status deployment/rabbitmq \
-            --namespace fiapx \
-            --timeout=180s
+            echo "🔍 Verificando recurso: $name no namespace: $ns"
 
-      - name: Aguardar MinIO
-        run: |
-          kubectl rollout status deployment/minio \
-            --namespace fiapx \
-            --timeout=180s
+            if kubectl get statefulset "$name" -n "$ns" &>/dev/null; then
+              echo "📦 Tipo detectado: StatefulSet"
+              kubectl rollout status statefulset/"$name" \
+                --namespace "$ns" \
+                --timeout="${timeout}s"
 
-      - name: Aguardar Redis
-        run: |
-          kubectl rollout status deployment/redis \
-            --namespace fiapx \
-            --timeout=180s
+            elif kubectl get deployment "$name" -n "$ns" &>/dev/null; then
+              echo "📦 Tipo detectado: Deployment"
+              kubectl rollout status deployment/"$name" \
+                --namespace "$ns" \
+                --timeout="${timeout}s"
+
+            else
+              echo "❌ Recurso '$name' não encontrado no namespace '$ns'"
+              echo "📋 Recursos disponíveis:"
+              kubectl get all -n "$ns"
+              return 1
+            fi
+          }
+
+          wait_for_resource postgres  fiapx 180
+          wait_for_resource rabbitmq  fiapx 180
+          wait_for_resource minio     fiapx 180
+          wait_for_resource redis     fiapx 180
