@@ -14,7 +14,7 @@ on:
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: false   # never cancel an in-flight deploy
+  cancel-in-progress: false
 
 env:
   AWS_REGION: us-east-1
@@ -23,13 +23,21 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/fiapx
 
 jobs:
+  # ── Job 1: Instalar dependências de infraestrutura ──────────────────────────
+  install-dependencies:
+    name: Install Dependencies
+    uses: ./.github/workflows/install-dependencies.yml
+    secrets: inherit
+
+  # ── Job 2: Deploy da aplicação ───────────────────────────────────────────────
   deploy:
     name: Deploy EKS
     runs-on: ubuntu-latest
+    needs: install-dependencies
     permissions:
       contents: read
       packages: read
-      id-token: write   # para OIDC com AWS (recomendado sobre access keys)
+      id-token: write
 
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
