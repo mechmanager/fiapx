@@ -151,9 +151,6 @@ jobs:
           echo "→ Namespace : fiapx"
           echo "→ Imagem    : ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"
 
-          kubectl apply -f k8s/api-gateway/ \
-            --namespace fiapx
-
           kubectl set image deployment/api-gateway \
             api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
             --namespace fiapx
