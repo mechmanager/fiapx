@@ -152,7 +152,7 @@ jobs:
             --namespace fiapx \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GHCR_TOKEN }} \   # ← PAT permanente
+            --docker-password=${{ secrets.GHCR_TOKEN }} \
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
