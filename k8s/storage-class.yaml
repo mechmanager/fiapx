@@ -1,0 +1,12 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: ebs-sc
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"   # ← define como padrão
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer                   # ← aguarda pod ser agendado
+reclaimPolicy: Delete
+parameters:
+  type: gp3                                               # ← mais barato e rápido que gp2
+  encrypted: "true"
