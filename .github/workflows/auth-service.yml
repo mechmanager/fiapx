@@ -71,7 +71,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_PAT }}          # ← PAT permanente
+          password: ${{ secrets.GHCR_TOKEN }}          # ← PAT permanente
 
       - name: SHA curto
         id: sha
@@ -152,7 +152,7 @@ jobs:
             --namespace fiapx \
             --docker-server=ghcr.io \
             --docker-username=${{ github.actor }} \
-            --docker-password=${{ secrets.GHCR_PAT }} \   # ← PAT permanente
+            --docker-password=${{ secrets.GHCR_TOKEN }} \   # ← PAT permanente
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
