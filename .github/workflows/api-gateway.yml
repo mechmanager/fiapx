@@ -146,6 +146,16 @@ jobs:
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Criar imagePullSecret GHCR
+        run: |
+          kubectl create secret docker-registry ghcr-secret \
+            --namespace fiapx \
+            --docker-server=ghcr.io \
+            --docker-username=${{ github.actor }} \
+            --docker-password=${{ secrets.GITHUB_TOKEN }} \
+            --save-config \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"
@@ -154,6 +164,10 @@ jobs:
           kubectl set image deployment/api-gateway \
             api-gateway=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
             --namespace fiapx
+
+          kubectl patch deployment api-gateway \
+            --namespace fiapx \
+            --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
 
       - name: Aguardar rollout
         run: |
