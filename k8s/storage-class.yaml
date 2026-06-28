@@ -3,10 +3,10 @@ kind: StorageClass
 metadata:
   name: ebs-sc
   annotations:
-    storageclass.kubernetes.io/is-default-class: "true"   # ← define como padrão
-provisioner: ebs.csi.aws.com
-volumeBindingMode: WaitForFirstConsumer                   # ← aguarda pod ser agendado
-reclaimPolicy: Delete
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.eks.amazonaws.com    # ✅ provisioner correto para EKS Auto Mode
 parameters:
-  type: gp3                                               # ← mais barato e rápido que gp2
-  encrypted: "true"
+  type: gp3
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: true

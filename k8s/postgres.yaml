@@ -66,6 +66,14 @@ spec:
         app: postgres
     spec:
       terminationGracePeriodSeconds: 60
+
+      # ✅ Toleration obrigatória para EKS Auto Mode
+      tolerations:
+        - key: "eks.amazonaws.com/compute-type"
+          operator: "Equal"
+          value: "auto"
+          effect: "NoSchedule"
+
       containers:
         - name: postgres
           image: postgres:16-alpine
@@ -125,6 +133,7 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
+
       volumes:
         - name: init-sql
           configMap:
