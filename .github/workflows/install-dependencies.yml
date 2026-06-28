@@ -100,8 +100,10 @@ jobs:
       - name: Apply ConfigMaps
         run: |
           echo "📋 Aplicando ConfigMaps..."
-          kubectl apply -f k8s/postgres-configmap.yaml
-          kubectl apply -f k8s/app-configmap.yaml
+          kubectl apply -f k8s/configmap.yaml
+          
+          echo "✅ ConfigMaps aplicados:"
+          kubectl get configmaps -n fiapx
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # POSTGRESQL
