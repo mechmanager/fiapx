@@ -73,12 +73,6 @@ jobs:
           echo "🗑️ Removendo StorageClass (campos imutáveis)..."
           kubectl delete storageclass ebs-sc --ignore-not-found
 
-          echo "🗑️ Removendo StatefulSets (mantendo PVCs)..."
-          kubectl delete statefulset elasticsearch -n fiapx --cascade=orphan --ignore-not-found
-
-          echo "🗑️ Removendo PVCs antigos..."
-          kubectl delete pvc elasticsearch-data-elasticsearch-0    -n fiapx --ignore-not-found
-
           echo "⏳ Aguardando limpeza completa..."
           sleep 15
 
@@ -160,15 +154,15 @@ jobs:
         run: |
           echo "📊 Aplicando Logstash..."
           kubectl apply -f k8s/logstash.yaml
-          kubectl rollout status deployment/logstash -n fiapx --timeout=180s
+          kubectl rollout status deployment/logstash -n fiapx --timeout=300s
 
           echo "📊 Aplicando Kibana..."
           kubectl apply -f k8s/kibana.yaml
-          kubectl rollout status deployment/kibana -n fiapx --timeout=180s
+          kubectl rollout status deployment/kibana -n fiapx --timeout=300s
 
           echo "📊 Aplicando Filebeat..."
           kubectl apply -f k8s/filebeat.yaml
-          kubectl rollout status daemonset/filebeat -n fiapx --timeout=180s
+          kubectl rollout status daemonset/filebeat -n fiapx --timeout=300s
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # PROMETHEUS + GRAFANA
@@ -177,11 +171,11 @@ jobs:
         run: |
           echo "📈 Aplicando Prometheus..."
           kubectl apply -f k8s/prometheus.yaml
-          kubectl rollout status deployment/prometheus -n fiapx --timeout=180s
+          kubectl rollout status deployment/prometheus -n fiapx --timeout=300s
 
           echo "📈 Aplicando Grafana..."
           kubectl apply -f k8s/grafana.yaml
-          kubectl rollout status deployment/grafana -n fiapx --timeout=180s
+          kubectl rollout status deployment/grafana -n fiapx --timeout=300s
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # VERIFICAÇÃO FINAL
