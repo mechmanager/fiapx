@@ -53,13 +53,16 @@ jobs:
         run: |
           kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
 
-          kubectl create secret generic app-secrets \
+          kubectl create secret generic fiapx-secrets \
             --namespace fiapx \
-            --from-literal=POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
-            --from-literal=RABBITMQ_PASSWORD=${{ secrets.RABBITMQ_PASSWORD }} \
-            --from-literal=MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }} \
-            --from-literal=MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }} \
-            --from-literal=JWT_SECRET=${{ secrets.JWT_SECRET }} \
+            --from-literal=postgres-password=${{ secrets.POSTGRES_PASSWORD }} \
+            --from-literal=rabbitmq-password=${{ secrets.RABBITMQ_PASSWORD }} \
+            --from-literal=minio-access-key=${{ secrets.MINIO_ACCESS_KEY }} \
+            --from-literal=minio-secret-key=${{ secrets.MINIO_SECRET_KEY }} \
+            --from-literal=jwt-secret=${{ secrets.JWT_SECRET }} \
+            --from-literal=smtp-password=${{ secrets.SMTP_PASSWORD }} \
+            --from-literal=grafana-admin-password=${{ secrets.GRAFANA_ADMIN_PASSWORD }} \
+            --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -71,13 +74,13 @@ jobs:
           kubectl delete storageclass ebs-sc --ignore-not-found
 
           echo "🗑️ Removendo StatefulSets (mantendo PVCs)..."
-          kubectl delete statefulset postgres      -n fiapx --cascade=orphan --ignore-not-found
+        #  kubectl delete statefulset postgres      -n fiapx --cascade=orphan --ignore-not-found
           kubectl delete statefulset rabbitmq      -n fiapx --cascade=orphan --ignore-not-found
           kubectl delete statefulset minio         -n fiapx --cascade=orphan --ignore-not-found
           kubectl delete statefulset elasticsearch -n fiapx --cascade=orphan --ignore-not-found
 
           echo "🗑️ Removendo PVCs antigos..."
-          kubectl delete pvc postgres-data-postgres-0              -n fiapx --ignore-not-found
+        #  kubectl delete pvc postgres-data-postgres-0              -n fiapx --ignore-not-found
           kubectl delete pvc rabbitmq-data-rabbitmq-0              -n fiapx --ignore-not-found
           kubectl delete pvc minio-data-minio-0                    -n fiapx --ignore-not-found
           kubectl delete pvc elasticsearch-data-elasticsearch-0    -n fiapx --ignore-not-found
