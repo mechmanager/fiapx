@@ -1,11 +1,28 @@
 name: Install Dependencies
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'k8s/**'
+  workflow_call:        # ← OBRIGATÓRIO para ser chamado por outro workflow
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: true
+      EKS_CLUSTER_NAME:
+        required: true
+      POSTGRES_PASSWORD:
+        required: true
+      RABBITMQ_PASSWORD:
+        required: true
+      MINIO_ROOT_PASSWORD:
+        required: true
+      MINIO_ROOT_USER:
+        required: true
+      JWT_SECRET:
+        required: true
+
+  workflow_dispatch:    # ← permite rodar manualmente também
 
 jobs:
   install:
@@ -74,8 +91,6 @@ jobs:
         run: |
           echo "📦 Aplicando StorageClass..."
           kubectl apply -f k8s/storage-class.yaml
-
-          echo "✅ StorageClass disponível:"
           kubectl get storageclass
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -85,7 +100,6 @@ jobs:
         run: |
           echo "📋 Aplicando ConfigMaps..."
           kubectl apply -f k8s/postgres-configmap.yaml
-          kubectl apply -f k8s/rabbitmq-configmap.yaml   --ignore-not-found || true
           kubectl apply -f k8s/app-configmap.yaml
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -95,11 +109,7 @@ jobs:
         run: |
           echo "🐘 Aplicando PostgreSQL..."
           kubectl apply -f k8s/postgres.yaml
-
-          echo "⏳ Aguardando PostgreSQL ficar pronto..."
           kubectl rollout status statefulset/postgres -n fiapx --timeout=300s
-
-          echo "✅ PostgreSQL status:"
           kubectl get pods -n fiapx -l app=postgres
           kubectl get pvc  -n fiapx -l app=postgres
 
@@ -110,13 +120,8 @@ jobs:
         run: |
           echo "🐇 Aplicando RabbitMQ..."
           kubectl apply -f k8s/rabbitmq.yaml
-
-          echo "⏳ Aguardando RabbitMQ ficar pronto..."
           kubectl rollout status statefulset/rabbitmq -n fiapx --timeout=300s
-
-          echo "✅ RabbitMQ status:"
           kubectl get pods -n fiapx -l app=rabbitmq
-          kubectl get pvc  -n fiapx -l app=rabbitmq
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # MINIO
@@ -125,13 +130,8 @@ jobs:
         run: |
           echo "🗄️ Aplicando MinIO..."
           kubectl apply -f k8s/minio.yaml
-
-          echo "⏳ Aguardando MinIO ficar pronto..."
           kubectl rollout status statefulset/minio -n fiapx --timeout=300s
-
-          echo "✅ MinIO status:"
           kubectl get pods -n fiapx -l app=minio
-          kubectl get pvc  -n fiapx -l app=minio
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # REDIS
@@ -140,11 +140,7 @@ jobs:
         run: |
           echo "🔴 Aplicando Redis..."
           kubectl apply -f k8s/redis.yaml
-
-          echo "⏳ Aguardando Redis ficar pronto..."
           kubectl rollout status deployment/redis -n fiapx --timeout=180s
-
-          echo "✅ Redis status:"
           kubectl get pods -n fiapx -l app=redis
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -154,13 +150,8 @@ jobs:
         run: |
           echo "🔍 Aplicando Elasticsearch..."
           kubectl apply -f k8s/elasticsearch.yaml
-
-          echo "⏳ Aguardando Elasticsearch ficar pronto..."
           kubectl rollout status statefulset/elasticsearch -n fiapx --timeout=300s
-
-          echo "✅ Elasticsearch status:"
           kubectl get pods -n fiapx -l app=elasticsearch
-          kubectl get pvc  -n fiapx -l app=elasticsearch
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # LOGSTASH + KIBANA + FILEBEAT
@@ -200,19 +191,7 @@ jobs:
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅  VERIFICAÇÃO FINAL DO AMBIENTE"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-          echo ""
-          echo "📦 StorageClass:"
           kubectl get storageclass
-
-          echo ""
-          echo "💾 PVCs:"
-          kubectl get pvc -n fiapx
-
-          echo ""
-          echo "🚀 Pods:"
+          kubectl get pvc  -n fiapx
           kubectl get pods -n fiapx
-
-          echo ""
-          echo "🌐 Services:"
-          kubectl get svc -n fiapx
+          kubectl get svc  -n fiapx
