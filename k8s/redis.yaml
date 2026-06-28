@@ -15,6 +15,11 @@ spec:
       labels:
         app: redis
     spec:
+      tolerations:                              # ✅ ADICIONADO
+        - key: "eks.amazonaws.com/compute-type"
+          operator: "Equal"
+          value: "auto"
+          effect: "NoSchedule"
       containers:
         - name: redis
           image: redis:7-alpine
