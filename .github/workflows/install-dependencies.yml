@@ -2,199 +2,217 @@ name: Install Dependencies
 
 on:
   workflow_dispatch:
-  workflow_call:
-
-env:
-  AWS_REGION: us-east-1
-  EKS_CLUSTER_NAME: fiapx
-  NAMESPACE: fiapx
+  push:
+    branches: [ main ]
+    paths:
+      - 'k8s/**'
 
 jobs:
-  install-dependencies:
-    name: 🚀 Install Infrastructure Dependencies
+  install:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 🔑 Configure AWS credentials
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region:            ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: ☸️ Update kubeconfig (EKS)
+      - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
-            --name ${{ env.EKS_CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }}
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
 
-      # ── NAMESPACE ──────────────────────────────
-      - name: 📁 Create namespace
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # NAMESPACE & SECRETS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Create Namespace and Secrets
         run: |
-          kubectl get namespace ${{ env.NAMESPACE }} \
-            || kubectl create namespace ${{ env.NAMESPACE }}
+          kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
 
-      # ── SECRETS ────────────────────────────────
-      - name: 🔐 Create secrets
-        run: |
-          kubectl create secret generic fiapx-secrets \
-            --namespace=${{ env.NAMESPACE }} \
-            --from-literal=postgres-password="${{ secrets.POSTGRES_PASSWORD }}" \
-            --from-literal=rabbitmq-password="${{ secrets.RABBITMQ_PASSWORD }}" \
-            --from-literal=minio-root-user="${{ secrets.MINIO_ROOT_USER }}" \
-            --from-literal=minio-root-password="${{ secrets.MINIO_ROOT_PASSWORD }}" \
-            --from-literal=jwt-secret="${{ secrets.JWT_SECRET }}" \
+          kubectl create secret generic app-secrets \
+            --namespace fiapx \
+            --from-literal=POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }} \
+            --from-literal=RABBITMQ_PASSWORD=${{ secrets.RABBITMQ_PASSWORD }} \
+            --from-literal=MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }} \
+            --from-literal=MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }} \
+            --from-literal=JWT_SECRET=${{ secrets.JWT_SECRET }} \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      # ── CONFIGMAP ──────────────────────────────
-      - name: 🗂️ Apply ConfigMap
-        run: kubectl apply -f k8s/configmap.yaml
-
-      # ── STORAGE CLASS ──────────────────────────
-      - name: 💾 Apply StorageClass
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # LIMPEZA DE RECURSOS IMUTÁVEIS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Cleanup Immutable Resources
         run: |
+          echo "🗑️ Removendo StorageClass (campos imutáveis)..."
+          kubectl delete storageclass ebs-sc --ignore-not-found
+
+          echo "🗑️ Removendo StatefulSets (mantendo PVCs)..."
+          kubectl delete statefulset postgres      -n fiapx --cascade=orphan --ignore-not-found
+          kubectl delete statefulset rabbitmq      -n fiapx --cascade=orphan --ignore-not-found
+          kubectl delete statefulset minio         -n fiapx --cascade=orphan --ignore-not-found
+          kubectl delete statefulset elasticsearch -n fiapx --cascade=orphan --ignore-not-found
+
+          echo "🗑️ Removendo PVCs antigos..."
+          kubectl delete pvc postgres-data-postgres-0              -n fiapx --ignore-not-found
+          kubectl delete pvc rabbitmq-data-rabbitmq-0              -n fiapx --ignore-not-found
+          kubectl delete pvc minio-data-minio-0                    -n fiapx --ignore-not-found
+          kubectl delete pvc elasticsearch-data-elasticsearch-0    -n fiapx --ignore-not-found
+
+          echo "⏳ Aguardando limpeza completa..."
+          sleep 15
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # STORAGECLASS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Apply StorageClass
+        run: |
+          echo "📦 Aplicando StorageClass..."
           kubectl apply -f k8s/storage-class.yaml
-          for i in $(seq 1 10); do
-            kubectl get storageclass ebs-sc &>/dev/null && echo "✅ ebs-sc ready" && break
-            echo "  attempt $i/10 – waiting 5s..."
-            sleep 5
-          done
 
-      # ── POSTGRESQL ─────────────────────────────
-      - name: 🐘 Recreate PostgreSQL StatefulSet
+          echo "✅ StorageClass disponível:"
+          kubectl get storageclass
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # CONFIGMAPS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Apply ConfigMaps
         run: |
-          if kubectl get statefulset postgres -n ${{ env.NAMESPACE }} &>/dev/null; then
-            kubectl delete statefulset postgres -n ${{ env.NAMESPACE }} --cascade=orphan
-            echo "✅ Old StatefulSet removed"
-          fi
+          echo "📋 Aplicando ConfigMaps..."
+          kubectl apply -f k8s/postgres-configmap.yaml
+          kubectl apply -f k8s/rabbitmq-configmap.yaml   --ignore-not-found || true
+          kubectl apply -f k8s/app-configmap.yaml
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # POSTGRESQL
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy PostgreSQL
+        run: |
+          echo "🐘 Aplicando PostgreSQL..."
           kubectl apply -f k8s/postgres.yaml
 
-      - name: ⏳ Wait PostgreSQL
-        run: |
-          kubectl rollout status statefulset/postgres \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=postgres
-          kubectl get pvc  -n ${{ env.NAMESPACE }}
+          echo "⏳ Aguardando PostgreSQL ficar pronto..."
+          kubectl rollout status statefulset/postgres -n fiapx --timeout=300s
 
-      # ── RABBITMQ ───────────────────────────────
-      - name: 🐰 Recreate RabbitMQ StatefulSet
+          echo "✅ PostgreSQL status:"
+          kubectl get pods -n fiapx -l app=postgres
+          kubectl get pvc  -n fiapx -l app=postgres
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # RABBITMQ
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy RabbitMQ
         run: |
-          if kubectl get statefulset rabbitmq -n ${{ env.NAMESPACE }} &>/dev/null; then
-            kubectl delete statefulset rabbitmq -n ${{ env.NAMESPACE }} --cascade=orphan
-          fi
+          echo "🐇 Aplicando RabbitMQ..."
           kubectl apply -f k8s/rabbitmq.yaml
 
-      - name: ⏳ Wait RabbitMQ
-        run: |
-          kubectl rollout status statefulset/rabbitmq \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=rabbitmq
+          echo "⏳ Aguardando RabbitMQ ficar pronto..."
+          kubectl rollout status statefulset/rabbitmq -n fiapx --timeout=300s
 
-      # ── MINIO ──────────────────────────────────
-      - name: 🪣 Recreate MinIO StatefulSet
+          echo "✅ RabbitMQ status:"
+          kubectl get pods -n fiapx -l app=rabbitmq
+          kubectl get pvc  -n fiapx -l app=rabbitmq
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # MINIO
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy MinIO
         run: |
-          if kubectl get statefulset minio -n ${{ env.NAMESPACE }} &>/dev/null; then
-            kubectl delete statefulset minio -n ${{ env.NAMESPACE }} --cascade=orphan
-          fi
+          echo "🗄️ Aplicando MinIO..."
           kubectl apply -f k8s/minio.yaml
 
-      - name: ⏳ Wait MinIO
-        run: |
-          kubectl rollout status statefulset/minio \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=minio
+          echo "⏳ Aguardando MinIO ficar pronto..."
+          kubectl rollout status statefulset/minio -n fiapx --timeout=300s
 
-      # ── REDIS ──────────────────────────────────
-      - name: 🔴 Deploy Redis
-        run: kubectl apply -f k8s/redis.yaml
+          echo "✅ MinIO status:"
+          kubectl get pods -n fiapx -l app=minio
+          kubectl get pvc  -n fiapx -l app=minio
 
-      - name: ⏳ Wait Redis
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # REDIS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Redis
         run: |
-          kubectl rollout status deployment/redis \
-            -n ${{ env.NAMESPACE }} --timeout=180s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=redis
+          echo "🔴 Aplicando Redis..."
+          kubectl apply -f k8s/redis.yaml
 
-      # ── ELASTICSEARCH ──────────────────────────
-      - name: 🔍 Recreate Elasticsearch StatefulSet
+          echo "⏳ Aguardando Redis ficar pronto..."
+          kubectl rollout status deployment/redis -n fiapx --timeout=180s
+
+          echo "✅ Redis status:"
+          kubectl get pods -n fiapx -l app=redis
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # ELASTICSEARCH
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Elasticsearch
         run: |
-          if kubectl get statefulset elasticsearch -n ${{ env.NAMESPACE }} &>/dev/null; then
-            kubectl delete statefulset elasticsearch -n ${{ env.NAMESPACE }} --cascade=orphan
-          fi
+          echo "🔍 Aplicando Elasticsearch..."
           kubectl apply -f k8s/elasticsearch.yaml
 
-      - name: ⏳ Wait Elasticsearch
+          echo "⏳ Aguardando Elasticsearch ficar pronto..."
+          kubectl rollout status statefulset/elasticsearch -n fiapx --timeout=300s
+
+          echo "✅ Elasticsearch status:"
+          kubectl get pods -n fiapx -l app=elasticsearch
+          kubectl get pvc  -n fiapx -l app=elasticsearch
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # LOGSTASH + KIBANA + FILEBEAT
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Observability Stack
         run: |
-          kubectl rollout status statefulset/elasticsearch \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=elasticsearch
+          echo "📊 Aplicando Logstash..."
+          kubectl apply -f k8s/logstash.yaml
+          kubectl rollout status deployment/logstash -n fiapx --timeout=180s
 
-      # ── LOGSTASH ───────────────────────────────
-      - name: 📊 Deploy Logstash
-        run: kubectl apply -f k8s/logstash.yaml
+          echo "📊 Aplicando Kibana..."
+          kubectl apply -f k8s/kibana.yaml
+          kubectl rollout status deployment/kibana -n fiapx --timeout=180s
 
-      - name: ⏳ Wait Logstash
+          echo "📊 Aplicando Filebeat..."
+          kubectl apply -f k8s/filebeat.yaml
+          kubectl rollout status daemonset/filebeat -n fiapx --timeout=180s
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # PROMETHEUS + GRAFANA
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Monitoring Stack
         run: |
-          kubectl rollout status deployment/logstash \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=logstash
+          echo "📈 Aplicando Prometheus..."
+          kubectl apply -f k8s/prometheus.yaml
+          kubectl rollout status deployment/prometheus -n fiapx --timeout=180s
 
-      # ── KIBANA ─────────────────────────────────
-      - name: 📈 Deploy Kibana
-        run: kubectl apply -f k8s/kibana.yaml
+          echo "📈 Aplicando Grafana..."
+          kubectl apply -f k8s/grafana.yaml
+          kubectl rollout status deployment/grafana -n fiapx --timeout=180s
 
-      - name: ⏳ Wait Kibana
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # VERIFICAÇÃO FINAL
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Final Verification
         run: |
-          kubectl rollout status deployment/kibana \
-            -n ${{ env.NAMESPACE }} --timeout=300s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=kibana
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅  VERIFICAÇÃO FINAL DO AMBIENTE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-      # ── FILEBEAT ───────────────────────────────
-      - name: 📂 Deploy Filebeat
-        run: kubectl apply -f k8s/filebeat.yaml
-
-      - name: ⏳ Wait Filebeat
-        run: |
-          kubectl rollout status daemonset/filebeat \
-            -n ${{ env.NAMESPACE }} --timeout=180s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=filebeat
-
-      # ── PROMETHEUS ─────────────────────────────
-      - name: 📡 Deploy Prometheus
-        run: kubectl apply -f k8s/prometheus.yaml
-
-      - name: ⏳ Wait Prometheus
-        run: |
-          kubectl rollout status deployment/prometheus \
-            -n ${{ env.NAMESPACE }} --timeout=180s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=prometheus
-
-      # ── GRAFANA ────────────────────────────────
-      - name: 📉 Deploy Grafana
-        run: kubectl apply -f k8s/grafana.yaml
-
-      - name: ⏳ Wait Grafana
-        run: |
-          kubectl rollout status deployment/grafana \
-            -n ${{ env.NAMESPACE }} --timeout=180s
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=grafana
-
-      # ── RESUMO ─────────────────────────────────
-      - name: 📋 Final status summary
-        if: always()
-        run: |
-          echo "════════════════════════════════════"
-          echo "  📋 FIAPX Infrastructure Summary   "
-          echo "════════════════════════════════════"
           echo ""
-          echo "📦 Pods:"
-          kubectl get pods -n ${{ env.NAMESPACE }} -o wide
+          echo "📦 StorageClass:"
+          kubectl get storageclass
+
           echo ""
           echo "💾 PVCs:"
-          kubectl get pvc -n ${{ env.NAMESPACE }}
+          kubectl get pvc -n fiapx
+
+          echo ""
+          echo "🚀 Pods:"
+          kubectl get pods -n fiapx
+
           echo ""
           echo "🌐 Services:"
-          kubectl get svc -n ${{ env.NAMESPACE }}
+          kubectl get svc -n fiapx
