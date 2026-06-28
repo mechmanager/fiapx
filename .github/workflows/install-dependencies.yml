@@ -74,11 +74,9 @@ jobs:
           kubectl delete storageclass ebs-sc --ignore-not-found
 
           echo "🗑️ Removendo StatefulSets (mantendo PVCs)..."
-          kubectl delete statefulset minio         -n fiapx --cascade=orphan --ignore-not-found
           kubectl delete statefulset elasticsearch -n fiapx --cascade=orphan --ignore-not-found
 
           echo "🗑️ Removendo PVCs antigos..."
-          kubectl delete pvc minio-data-minio-0                    -n fiapx --ignore-not-found
           kubectl delete pvc elasticsearch-data-elasticsearch-0    -n fiapx --ignore-not-found
 
           echo "⏳ Aguardando limpeza completa..."
