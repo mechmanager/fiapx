@@ -66,17 +66,6 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      # LIMPEZA DE RECURSOS IMUTÁVEIS
-      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      - name: Cleanup Immutable Resources
-        run: |
-          echo "🗑️ Removendo StorageClass (campos imutáveis)..."
-          kubectl delete storageclass ebs-sc --ignore-not-found
-
-          echo "⏳ Aguardando limpeza completa..."
-          sleep 15
-
-      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       # STORAGECLASS
       # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Apply StorageClass
