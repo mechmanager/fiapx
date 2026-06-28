@@ -11,6 +11,11 @@ data:
   # RabbitMQ                         # ← ADICIONAR bloco
   RABBITMQ_HOST: "rabbitmq"
   RABBITMQ_PORT: "5672"
+  RABBITMQ_DEFAULT_USER: "fiapx"
+  RABBITMQ_DEFAULT_PASS: "fiapx123"
+  MINIO_ROOT_USER_KEY: "minioadmin"
+  MINIO_ROOT_PASSWORD_KEY: "minioadmin123"
+  MINIO_BUCKET: "videos"
 
   # Redis                            # ← ADICIONAR
   REDIS_HOST: "redis"

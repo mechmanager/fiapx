@@ -27,13 +27,13 @@ spec:
             - name: MINIO_ROOT_USER
               valueFrom:
                 secretKeyRef:
-                  name: fiapx-secrets
-                  key: minio-access-key
-            - name: MINIO_ROOT_PASSWORD
+                  name: fiapx-shared
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD_KEY
               valueFrom:
                 secretKeyRef:
-                  name: fiapx-secrets
-                  key: minio-secret-key
+                  name: fiapx-shared
+                  key: MINIO_ROOT_PASSWORD_KEY
       containers:
         - name: minio
           image: minio/minio:RELEASE.2024-11-06T22-26-08Z
