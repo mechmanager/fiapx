@@ -6,7 +6,15 @@ on:
     paths:
       - "notification-service/**"
       - ".github/workflows/notification-service.yml"
-
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
 concurrency:
   group: notification-service-ci-${{ github.ref }}
   cancel-in-progress: true

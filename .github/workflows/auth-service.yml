@@ -6,6 +6,15 @@ on:
     paths:
       - "auth-service/**"
       - ".github/workflows/auth-service.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
 
 concurrency:
   group: auth-service-ci-${{ github.ref }}
@@ -103,7 +112,6 @@ jobs:
     name: Deploy → fiapx
     runs-on: ubuntu-latest
     needs: docker
-    # ← if REMOVIDO — deploya em qualquer branch
     concurrency:
       group: deploy-eks-fiapx
       cancel-in-progress: false

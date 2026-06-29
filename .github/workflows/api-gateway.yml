@@ -6,6 +6,15 @@ on:
     paths:
       - "api-gateway/**"
       - ".github/workflows/api-gateway.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
 
 concurrency:
   group: api-gateway-ci-${{ github.ref }}

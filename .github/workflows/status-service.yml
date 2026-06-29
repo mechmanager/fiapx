@@ -6,7 +6,15 @@ on:
     paths:
       - "status-service/**"
       - ".github/workflows/status-service.yml"
-
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
 concurrency:
   group: status-service-ci-${{ github.ref }}
   cancel-in-progress: true

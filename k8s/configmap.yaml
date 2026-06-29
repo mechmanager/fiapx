@@ -15,7 +15,10 @@ data:
   RABBITMQ_DEFAULT_PASS: "fiapx123"
   MINIO_ROOT_USER_KEY: "minioadmin"
   MINIO_ROOT_PASSWORD_KEY: "minioadmin123"
+  MINIO_ACCESS_KEY: "minioadmin"
+  MINIO_SECRET_KEY: "minioadmin123"
   MINIO_BUCKET: "videos"
+  MINIO_ENDPOINT: "minio:9000"
 
   # Redis                            # ← ADICIONAR
   REDIS_HOST: "redis"

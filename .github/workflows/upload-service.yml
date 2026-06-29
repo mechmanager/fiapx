@@ -6,7 +6,15 @@ on:
     paths:
       - "upload-service/**"
       - ".github/workflows/upload-service.yml"
-
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente de destino"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
 concurrency:
   group: upload-service-ci-${{ github.ref }}
   cancel-in-progress: true
