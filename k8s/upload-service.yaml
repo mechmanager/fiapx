@@ -28,6 +28,16 @@ spec:
           env:
             - name: POSTGRES_DSN
               value: postgres://fiapx:fiapx123@postgres:5432/fiapx?sslmode=disable
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: fiapx-shared
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: fiapx-shared
+                  key: POSTGRES_DB
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
