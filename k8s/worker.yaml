@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/mechmanager/fiapx-worker:sha-000000
+          image: ghcr.io/mechmanager/fiapx-worker:latest
           envFrom:
             - configMapRef:
                 name: fiapx-shared

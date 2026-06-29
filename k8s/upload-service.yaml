@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: upload-service
-          image: ghcr.io/mechmanager/fiapx-upload-service:sha-000000
+          image: ghcr.io/mechmanager/fiapx-upload-service:latest
           ports:
             - containerPort: 8082
           envFrom:

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: status-service
-          image: ghcr.io/mechmanager/fiapx-status-service:sha-000000
+          image: ghcr.io/mechmanager/fiapx-status-service:latest
           ports:
             - containerPort: 8083
           envFrom:
