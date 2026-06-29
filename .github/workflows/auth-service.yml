@@ -145,9 +145,21 @@ jobs:
             --docker-password=${{ secrets.GHCR_TOKEN }} \
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
+      - name: Deploy
+        run: |
+          echo "→ Namespace : fiapx"
+          echo "→ Imagem    : ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"
+
+          kubectl set image deployment/auth-service \
+            auth-service=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} \
+            --namespace fiapx
+
+          kubectl patch deployment auth-service \
+            --namespace fiapx \
+            --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
       - name: Aplicar Deployment atualizado
         run: |
-          kubectl apply -f k8s/auth-service.yaml --namespace fiapx
+          kubectl apply -f auth-service/deployment.yaml --namespace fiapx
       - name: Aguardar rollout
         run: |
           kubectl rollout status deployment/auth-service \
