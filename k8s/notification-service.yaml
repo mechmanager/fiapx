@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: notification-service
-          image: ghcr.io/mechmanager/fiapx-auth-service:latest
+          image: ghcr.io/mechmanager/fiapx-notification-service:latest
           envFrom:
             - configMapRef:
                 name: fiapx-notification-config
