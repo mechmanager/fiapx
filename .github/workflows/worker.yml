@@ -178,7 +178,9 @@ jobs:
           kubectl patch deployment worker \
             --namespace fiapx \
             --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
-
+      - name: Aplicar Deployment atualizado
+        run: |
+          kubectl apply -f k8s/worker.yaml --namespace fiapx
       - name: Aguardar rollout
         run: |
           kubectl rollout status deployment/worker \

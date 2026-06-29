@@ -6,7 +6,7 @@ metadata:
   labels:
     app: status-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: status-service
@@ -27,7 +27,7 @@ spec:
                 name: fiapx-status-config
           env:
             - name: POSTGRES_DSN
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
+              value: postgres://fiapx:fiapx123@postgres:5432/fiapx?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
