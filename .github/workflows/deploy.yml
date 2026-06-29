@@ -28,6 +28,9 @@ jobs:
     name: Install Dependencies
     uses: ./.github/workflows/install-dependencies.yml
     secrets: inherit
+    permissions:
+      contents: read
+      id-token: write   # ← necessário para repassar permissão ao job filho
 
   # ── Job 2: Deploy da aplicação ───────────────────────────────────────────────
   deploy:
@@ -43,16 +46,6 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       # ── AWS credentials ──────────────────────────────────────────────────────
-      # Opção A (OIDC — mais seguro, sem chaves de longa duração):
-      #   Configure um IAM OIDC Provider para GitHub Actions no seu AWS Account.
-      #   Descomente o bloco abaixo e remova o bloco de access keys.
-      # - name: Configurar credenciais AWS via OIDC
-      #   uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502
-      #   with:
-      #     role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github-actions-fiapx
-      #     aws-region: ${{ env.AWS_REGION }}
-
-      # Opção B (access keys — mais simples para hackathon):
       - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -95,7 +88,6 @@ jobs:
         run: |
           SHA=${{ steps.sha.outputs.short }}
 
-          # Substituir sha-000000 pelo SHA real em todos os manifestos
           find k8s/ -name "*.yaml" -exec \
             sed -i "s|:sha-000000|:sha-${SHA}|g" {} +
 

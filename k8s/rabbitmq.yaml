@@ -26,7 +26,7 @@ spec:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
                 configMapKeyRef:
-                  name: fiapx-config
+                  name: fiapx-shared
                   key: RABBITMQ_DEFAULT_USER
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom:

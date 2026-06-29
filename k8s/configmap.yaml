@@ -6,9 +6,20 @@ metadata:
 data:
   POSTGRES_DB: "fiapx"
   POSTGRES_USER: "fiapx"
-  MINIO_ENDPOINT: "minio:9000"
+  POSTGRES_HOST: "postgres"          # ← ADICIONAR
+  POSTGRES_PORT: "5432"              # ← ADICIONAR
+  # RabbitMQ                         # ← ADICIONAR bloco
+  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_PORT: "5672"
+  RABBITMQ_DEFAULT_USER: "fiapx"
+  RABBITMQ_DEFAULT_PASS: "fiapx123"
+  MINIO_ROOT_USER_KEY: "minioadmin"
+  MINIO_ROOT_PASSWORD_KEY: "minioadmin123"
   MINIO_BUCKET: "videos"
-  MINIO_USE_SSL: "false"
+
+  # Redis                            # ← ADICIONAR
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
 ---
 apiVersion: v1
 kind: ConfigMap

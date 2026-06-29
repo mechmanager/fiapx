@@ -1,70 +1,58 @@
-# .github/workflows/install-dependencies.yml
-name: install-dependencies
+name: Install Dependencies
 
 on:
-  workflow_call:
+  workflow_call:        # ← OBRIGATÓRIO para ser chamado por outro workflow
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
       AWS_SECRET_ACCESS_KEY:
         required: true
-      AWS_SESSION_TOKEN:
-        required: false
+      AWS_REGION:
+        required: true
+      EKS_CLUSTER_NAME:
+        required: true
       POSTGRES_PASSWORD:
         required: true
       RABBITMQ_PASSWORD:
         required: true
-      MINIO_ACCESS_KEY:
+      MINIO_ROOT_PASSWORD:
         required: true
-      MINIO_SECRET_KEY:
+      MINIO_ROOT_USER:
         required: true
       JWT_SECRET:
         required: true
-      SMTP_PASSWORD:
-        required: true
-      GRAFANA_ADMIN_PASSWORD:
-        required: true
 
-env:
-  AWS_REGION: us-east-1
-  CLUSTER_NAME: fiapx
+  workflow_dispatch:    # ← permite rodar manualmente também
 
 jobs:
-  install-dependencies:
-    name: Install Infra Dependencies
+  install:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@v4
 
-      # ── AWS credentials ────────────────────────────────────────────────────
-      - name: Configurar credenciais AWS
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # ── kubeconfig ─────────────────────────────────────────────────────────
-      - name: Atualizar kubeconfig para EKS
+      - name: Update kubeconfig
         run: |
           aws eks update-kubeconfig \
-            --name ${{ env.CLUSTER_NAME }} \
-            --region ${{ env.AWS_REGION }}
+            --name ${{ secrets.EKS_CLUSTER_NAME }} \
+            --region ${{ secrets.AWS_REGION }}
 
-      # ── Namespace ──────────────────────────────────────────────────────────
-      - name: Criar namespace fiapx
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # NAMESPACE & SECRETS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Create Namespace and Secrets
         run: |
           kubectl create namespace fiapx --dry-run=client -o yaml | kubectl apply -f -
 
-      # ── Secrets ────────────────────────────────────────────────────────────
-      - name: Aplicar secrets do Kubernetes
-        run: |
           kubectl create secret generic fiapx-secrets \
             --namespace fiapx \
             --from-literal=postgres-password=${{ secrets.POSTGRES_PASSWORD }} \
@@ -77,58 +65,116 @@ jobs:
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      # ── Manifestos de infraestrutura ───────────────────────────────────────
-      - name: Aplicar PostgreSQL
-        run: kubectl apply -f k8s/postgres.yaml --namespace fiapx
-
-      - name: Aplicar RabbitMQ
-        run: kubectl apply -f k8s/rabbitmq.yaml --namespace fiapx
-
-      - name: Aplicar MinIO
-        run: kubectl apply -f k8s/minio.yaml --namespace fiapx
-
-      - name: Aplicar Redis
-        run: kubectl apply -f k8s/redis.yaml --namespace fiapx
-
-      - name: Aplicar Elasticsearch
-        run: kubectl apply -f k8s/elasticsearch.yaml --namespace fiapx
-
-      - name: Aplicar Logstash
-        run: kubectl apply -f k8s/logstash.yaml --namespace fiapx
-
-      - name: Aplicar Kibana
-        run: kubectl apply -f k8s/kibana.yaml --namespace fiapx
-
-      - name: Aplicar Filebeat
-        run: kubectl apply -f k8s/filebeat.yaml --namespace fiapx
-
-      - name: Aplicar Prometheus
-        run: kubectl apply -f k8s/prometheus.yaml --namespace fiapx
-
-      - name: Aplicar Grafana
-        run: kubectl apply -f k8s/grafana.yaml --namespace fiapx
-
-      # ── Aguardar dependências críticas ─────────────────────────────────────
-      - name: Aguardar PostgreSQL
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # STORAGECLASS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Apply StorageClass
         run: |
-          kubectl rollout status deployment/postgres \
-            --namespace fiapx \
-            --timeout=180s
+          echo "📦 Aplicando StorageClass..."
+          kubectl apply -f k8s/storage-class.yaml
+          kubectl get storageclass
 
-      - name: Aguardar RabbitMQ
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # CONFIGMAPS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Apply ConfigMaps
         run: |
-          kubectl rollout status deployment/rabbitmq \
-            --namespace fiapx \
-            --timeout=180s
+          echo "📋 Aplicando ConfigMaps..."
+          kubectl apply -f k8s/configmap.yaml
+          
+          echo "✅ ConfigMaps aplicados:"
+          kubectl get configmaps -n fiapx
 
-      - name: Aguardar MinIO
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # POSTGRESQL
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy PostgreSQL
         run: |
-          kubectl rollout status deployment/minio \
-            --namespace fiapx \
-            --timeout=180s
+          echo "🐘 Aplicando PostgreSQL..."
+          kubectl apply -f k8s/postgres.yaml
+          kubectl rollout status statefulset/postgres -n fiapx --timeout=300s
+          kubectl get pods -n fiapx -l app=postgres
+          kubectl get pvc  -n fiapx -l app=postgres
 
-      - name: Aguardar Redis
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # RABBITMQ
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy RabbitMQ
         run: |
-          kubectl rollout status deployment/redis \
-            --namespace fiapx \
-            --timeout=180s
+          echo "🐇 Aplicando RabbitMQ..."
+          kubectl apply -f k8s/rabbitmq.yaml
+          kubectl rollout status statefulset/rabbitmq -n fiapx --timeout=300s
+          kubectl get pods -n fiapx -l app=rabbitmq
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # MINIO
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy MinIO
+        run: |
+          echo "🗄️ Aplicando MinIO..."
+          kubectl apply -f k8s/minio.yaml
+          kubectl rollout status statefulset/minio -n fiapx --timeout=300s
+          kubectl get pods -n fiapx -l app=minio
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # REDIS
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Redis
+        run: |
+          echo "🔴 Aplicando Redis..."
+          kubectl apply -f k8s/redis.yaml
+          kubectl rollout status deployment/redis -n fiapx --timeout=180s
+          kubectl get pods -n fiapx -l app=redis
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # ELASTICSEARCH
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Elasticsearch
+        run: |
+          echo "🔍 Aplicando Elasticsearch..."
+          kubectl apply -f k8s/elasticsearch.yaml
+          kubectl rollout status statefulset/elasticsearch -n fiapx --timeout=300s
+          kubectl get pods -n fiapx -l app=elasticsearch
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # LOGSTASH + KIBANA + FILEBEAT
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Observability Stack
+        run: |
+          echo "📊 Aplicando Logstash..."
+          kubectl apply -f k8s/logstash.yaml
+          kubectl rollout status deployment/logstash -n fiapx --timeout=300s
+
+          echo "📊 Aplicando Kibana..."
+          kubectl apply -f k8s/kibana.yaml
+          kubectl rollout status deployment/kibana -n fiapx --timeout=300s
+
+          echo "📊 Aplicando Filebeat..."
+          kubectl apply -f k8s/filebeat.yaml
+          kubectl rollout status daemonset/filebeat -n fiapx --timeout=300s
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # PROMETHEUS + GRAFANA
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Deploy Monitoring Stack
+        run: |
+          echo "📈 Aplicando Prometheus..."
+          kubectl apply -f k8s/prometheus.yaml
+          kubectl rollout status deployment/prometheus -n fiapx --timeout=300s
+
+          echo "📈 Aplicando Grafana..."
+          kubectl apply -f k8s/grafana.yaml
+          kubectl rollout status deployment/grafana -n fiapx --timeout=300s
+
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      # VERIFICAÇÃO FINAL
+      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      - name: Final Verification
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅  VERIFICAÇÃO FINAL DO AMBIENTE"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          kubectl get storageclass
+          kubectl get pvc  -n fiapx
+          kubectl get pods -n fiapx
+          kubectl get svc  -n fiapx
