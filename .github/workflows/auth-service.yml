@@ -157,9 +157,6 @@ jobs:
           kubectl patch deployment auth-service \
             --namespace fiapx \
             --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
-      - name: Aplicar Deployment atualizado
-        run: |
-          kubectl apply -f k8s/auth-service.yaml --namespace fiapx
       - name: Aguardar rollout
         run: |
           kubectl rollout status deployment/auth-service \

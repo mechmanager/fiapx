@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          image: ghcr.io/mechmanager/fiapx-auth-service:sha-000000
+          image: ghcr.io/mechmanager/fiapx-auth-service:latest
           ports:
             - containerPort: 8081
           envFrom:
