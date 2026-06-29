@@ -21,7 +21,7 @@ data:
   MINIO_ENDPOINT: "minio:9000"
 
   # Redis                            # ← ADICIONAR
-  REDIS_HOST: "redis"
+  REDIS_URL: "redis://redis:6379"
   REDIS_PORT: "6379"
 ---
 apiVersion: v1
