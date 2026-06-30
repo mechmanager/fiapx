@@ -56,7 +56,6 @@ metadata:
   name: rabbitmq
   namespace: fiapx
 spec:
-  clusterIP: None
   selector:
     app: rabbitmq
   ports:

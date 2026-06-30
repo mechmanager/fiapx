@@ -9,7 +9,7 @@ data:
   POSTGRES_HOST: "postgres"          # ← ADICIONAR
   POSTGRES_PORT: "5432"              # ← ADICIONAR
   # RabbitMQ                         # ← ADICIONAR bloco
-  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_HOST: "rabbitmq.fiapx.svc.cluster.local:5672"
   RABBITMQ_PORT: "5672"
   RABBITMQ_DEFAULT_USER: "fiapx"
   RABBITMQ_DEFAULT_PASS: "fiapx123"
