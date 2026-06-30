@@ -177,7 +177,8 @@ jobs:
           kubectl patch deployment status-service \
             --namespace fiapx \
             --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
-      - name: Aplicar Deployment atualizado
+
+      - name: Aplicar manifests do status-service
         run: |
           kubectl apply -f k8s/status-service.yaml --namespace fiapx
       - name: Aguardar rollout
