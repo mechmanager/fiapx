@@ -165,6 +165,10 @@ jobs:
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Aplicar manifests do api-gateway
+        run: |
+          kubectl apply -f k8s/api-gateway.yaml --namespace fiapx
+
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"
