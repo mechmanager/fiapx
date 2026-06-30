@@ -145,6 +145,9 @@ jobs:
             --docker-password=${{ secrets.GHCR_TOKEN }} \
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -
+      - name: Aplicar manifests do auth-service
+        run: |
+          kubectl apply -f k8s/auth-service.yaml --namespace fiapx
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"
