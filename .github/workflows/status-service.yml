@@ -164,7 +164,9 @@ jobs:
             --docker-password=${{ secrets.GHCR_TOKEN }} \
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -  # ✅ PAT de longa duração
-
+      - name: Aplicar manifests do status-service
+        run: |
+          kubectl apply -f k8s/status-service.yaml --namespace fiapx
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"
@@ -178,9 +180,7 @@ jobs:
             --namespace fiapx \
             --patch '{"spec":{"template":{"spec":{"imagePullSecrets":[{"name":"ghcr-secret"}]}}}}'
 
-      - name: Aplicar manifests do status-service
-        run: |
-          kubectl apply -f k8s/status-service.yaml --namespace fiapx
+
       - name: Aguardar rollout
         run: |
           kubectl rollout status deployment/status-service \
