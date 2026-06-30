@@ -46,37 +46,38 @@ jobs:
             --name ${{ secrets.EKS_CLUSTER_NAME }} \
             --region ${{ secrets.AWS_REGION }}
 
-      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-      # CORE DNS ADDON
-      # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
       - name: Ensure CoreDNS Addon
         run: |
           echo "📡 Garantindo CoreDNS no cluster..."
           
-          # Descobre versão suportada mais recente
+          CLUSTER_VERSION=$(aws eks describe-cluster \
+          --name ${{ secrets.EKS_CLUSTER_NAME }} \
+          --region ${{ secrets.AWS_REGION }} \
+          --query "cluster.version" --output text)
+          
           LATEST_VERSION=$(aws eks describe-addon-versions \
-            --addon-name coredns \
-            --query 'addons[0].addonVersions[-1].addonVersion' \
-            --region ${{ secrets.AWS_REGION }} \
-            --output text)
-
-          echo "➡️ Usando versão: $LATEST_VERSION"
-
-          # Tenta criar, se já existir faz update
+          --addon-name coredns \
+          --kubernetes-version $CLUSTER_VERSION \
+          --region ${{ secrets.AWS_REGION }} \
+          --query 'addons[0].addonVersions[-1].addonVersion' \
+          --output text)
+          
+          echo "➡️ Usando versão suportada: $LATEST_VERSION"
+          
           if ! aws eks describe-addon --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} --addon-name coredns --region ${{ secrets.AWS_REGION }} >/dev/null 2>&1; then
-            aws eks create-addon \
-              --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-              --addon-name coredns \
-              --addon-version $LATEST_VERSION \
-              --resolve-conflicts OVERWRITE
+          aws eks create-addon \
+           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
+           --addon-name coredns \
+           --addon-version $LATEST_VERSION \
+           --resolve-conflicts OVERWRITE
           else
-            aws eks update-addon \
-              --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
-              --addon-name coredns \
-              --addon-version $LATEST_VERSION \
-              --resolve-conflicts OVERWRITE
+          aws eks update-addon \
+           --cluster-name ${{ secrets.EKS_CLUSTER_NAME }} \
+           --addon-name coredns \
+           --addon-version $LATEST_VERSION \
+           --resolve-conflicts OVERWRITE
           fi
-
+          
           kubectl rollout status deployment coredns -n kube-system --timeout=180s
           kubectl get pods -n kube-system -l k8s-app=kube-dns
           kubectl get svc kube-dns -n kube-system
