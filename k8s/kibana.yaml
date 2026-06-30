@@ -27,8 +27,9 @@ spec:
             httpGet:
               path: /api/status
               port: 5601
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 5
           resources:
             requests:
               cpu: "200m"
