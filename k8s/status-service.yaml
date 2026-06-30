@@ -46,7 +46,7 @@ spec:
             - name: REDIS_URL
               valueFrom:
                 configMapKeyRef:
-                  key: REDIS_HOST
+                  key: REDIS_URL
                   name: fiapx-shared
 
           readinessProbe:
