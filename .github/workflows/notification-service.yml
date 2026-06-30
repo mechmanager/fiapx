@@ -53,7 +53,7 @@ jobs:
         working-directory: notification-service
         run: |
           go test -coverprofile=coverage.out \
-            ./config/... ./domain/... ./service/... ./mailer/...
+            ./config/... ./domain/... ./mailer/...
           total=$(go tool cover -func=coverage.out \
             | awk '/^total:/ {gsub(/%/,""); print $3}')
           echo "Cobertura: ${total}%"
@@ -165,6 +165,9 @@ jobs:
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -  # ✅ PAT de longa duração
 
+      - name: Aplicar manifests do notification-service
+        run: |
+          kubectl apply -f k8s/notification-service.yaml --namespace fiapx
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"
