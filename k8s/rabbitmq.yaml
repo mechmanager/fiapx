@@ -34,10 +34,15 @@ spec:
                   name: fiapx-secrets
                   key: rabbitmq-password
           readinessProbe:
-            exec:
-              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            tcpSocket:
+              port: 5672
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          livenessProbe:
+            tcpSocket:
+              port: 5672
             initialDelaySeconds: 20
-            periodSeconds: 10
+            periodSeconds: 30
           volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
