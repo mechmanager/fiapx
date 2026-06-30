@@ -6,7 +6,7 @@ metadata:
   labels:
     app: auth-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: auth-service
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: auth-service
-          image: ghcr.io/mechmanager/fiapx-auth-service:sha-000000
+          image: ghcr.io/mechmanager/fiapx-auth-service:latest
           ports:
             - containerPort: 8081
           envFrom:
@@ -25,7 +25,7 @@ spec:
                 name: fiapx-auth-config
           env:
             - name: POSTGRES_DSN
-              value: postgres://fiapx:fiapx123@postgres:5432/fiapxdb?sslmode=disable
+              value: postgres://fiapx:fiapx123@postgres:5432/fiapx?sslmode=disable
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:

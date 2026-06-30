@@ -164,7 +164,9 @@ jobs:
             --docker-password=${{ secrets.GHCR_TOKEN }} \
             --save-config \
             --dry-run=client -o yaml | kubectl apply -f -  # ✅ PAT de longa duração
-
+      - name: Aplicar Deployment atualizado
+        run: |
+          kubectl apply -f k8s/upload-service.yaml --namespace fiapx
       - name: Deploy
         run: |
           echo "→ Namespace : fiapx"

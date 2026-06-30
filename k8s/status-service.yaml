@@ -6,7 +6,7 @@ metadata:
   labels:
     app: status-service
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: status-service
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: status-service
-          image: ghcr.io/mechmanager/fiapx-status-service:sha-000000
+          image: ghcr.io/mechmanager/fiapx-status-service:latest
           ports:
             - containerPort: 8083
           envFrom:
@@ -27,7 +27,7 @@ spec:
                 name: fiapx-status-config
           env:
             - name: POSTGRES_DSN
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
+              value: postgres://fiapx:fiapx123@postgres:5432/fiapx?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -46,7 +46,7 @@ spec:
             - name: REDIS_URL
               valueFrom:
                 configMapKeyRef:
-                  key: REDIS_HOST
+                  key: REDIS_URL
                   name: fiapx-shared
 
           readinessProbe:

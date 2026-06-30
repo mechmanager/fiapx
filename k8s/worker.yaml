@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: worker
-          image: ghcr.io/mechmanager/fiapx-worker:sha-000000
+          image: ghcr.io/mechmanager/fiapx-worker:latest
           envFrom:
             - configMapRef:
                 name: fiapx-shared
@@ -25,14 +25,14 @@ spec:
                 name: fiapx-worker-config
           env:
             - name: DB_DSN
-              value: postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)?sslmode=disable
+              value: postgres://fiapx:fiapx123@postgres:5432/fiapx?sslmode=disable
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: fiapx-secrets
                   key: postgres-password
             - name: RABBITMQ_URL
-              value: amqp://$(RABBITMQ_DEFAULT_USER):$(RABBITMQ_PASSWORD)@rabbitmq:5672/
+              value: amqp://fiapx:fiapx123@rabbitmq:5672/
             - name: RABBITMQ_PASSWORD
               valueFrom:
                 secretKeyRef:

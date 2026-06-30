@@ -9,7 +9,7 @@ data:
   POSTGRES_HOST: "postgres"          # ← ADICIONAR
   POSTGRES_PORT: "5432"              # ← ADICIONAR
   # RabbitMQ                         # ← ADICIONAR bloco
-  RABBITMQ_HOST: "rabbitmq"
+  RABBITMQ_HOST: "rabbitmq.fiapx.svc.cluster.local:5672"
   RABBITMQ_PORT: "5672"
   RABBITMQ_DEFAULT_USER: "fiapx"
   RABBITMQ_DEFAULT_PASS: "fiapx123"
@@ -21,7 +21,7 @@ data:
   MINIO_ENDPOINT: "minio:9000"
 
   # Redis                            # ← ADICIONAR
-  REDIS_HOST: "redis"
+  REDIS_URL: "redis://redis:6379"
   REDIS_PORT: "6379"
 ---
 apiVersion: v1
